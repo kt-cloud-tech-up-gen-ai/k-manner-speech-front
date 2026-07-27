@@ -56,3 +56,9 @@ coverage/
 *.log
 tmp/
 .cache/
+
+# Figma extraction cache (regenerate with scripts/figma/sync.py)
+.figma/
+
+# Storybook build output
+storybook-static/
