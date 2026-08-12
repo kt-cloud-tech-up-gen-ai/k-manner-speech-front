@@ -5,7 +5,7 @@ export const HOME_SUMMARY: HomeSummary = {
   greetingSub: '로그인하고 학습기록을 안전하게 저장하세요.',
   streak: { label: '이번 주 연속 연습', days: 3, weeklyGoal: 7, statusLabel: '진행 중' },
   pick: {
-    scenarioId: 'ask-directions',
+    scenarioId: 'campus_directions',
     personaLabel: '도윤 · 캠퍼스',
     title: '캠퍼스에서 길 물어보기',
     meta: '처음 만난 사이 · 약 3분',
