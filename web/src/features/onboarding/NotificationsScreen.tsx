@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'motion/react'
+import { useShallow } from 'zustand/react/shallow'
 import { ScreenBody } from '@/components/shell/Screen'
 import { Stepper } from '@/components/shell/TopBar'
 import { Button } from '@/components/ui/Button'
@@ -23,13 +24,15 @@ export function NotificationsScreen() {
   const setNotifications = useAppStore((s) => s.setNotifications)
   const completeOnboarding = useAppStore((s) => s.completeOnboarding)
   const signedIn = useAppStore((s) => s.signedIn)
-  const onboardingState = useAppStore((s) => ({
-    locale: s.locale,
-    purposes: s.purposes,
-    purposeOther: s.purposeOther,
-    pace: s.pace,
-    profile: s.profile,
-  }))
+  const onboardingState = useAppStore(
+    useShallow((s) => ({
+      locale: s.locale,
+      purposes: s.purposes,
+      purposeOther: s.purposeOther,
+      pace: s.pace,
+      profile: s.profile,
+    })),
+  )
   const [error, setError] = useState('')
 
   async function finish(allowed: boolean) {
