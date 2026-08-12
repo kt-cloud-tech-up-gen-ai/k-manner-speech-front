@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { login, signup } from '@/api/client'
+import { getMe, login, signup } from '@/api/client'
 import { ScreenBody } from '@/components/shell/Screen'
 import { BackButton } from '@/components/shell/TopBar'
 import { Button } from '@/components/ui/Button'
@@ -27,6 +27,8 @@ export function LoginScreen() {
     try {
       if (mode === 'login') await login(email.trim(), password)
       else await signup(email.trim(), password)
+      // 응답만 성공하고 인증 쿠키가 저장되지 않은 경우를 로그인으로 표시하지 않는다.
+      await getMe()
       markSignedIn()
       navigate('/home')
     } catch (reason) {

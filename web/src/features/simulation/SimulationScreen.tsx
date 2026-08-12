@@ -32,9 +32,12 @@ export function SimulationScreen() {
   const mode = params.get('mode') === 'continue' ? 'continue' : 'new'
 
   const [session, setSession] = useState<SimulationSession | null>(null)
+  const [loadError, setLoadError] = useState('')
+  const [loadAttempt, setLoadAttempt] = useState(0)
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [draft, setDraft] = useState('')
   const [sending, setSending] = useState(false)
+  const [messageError, setMessageError] = useState('')
   const [feedback, setFeedback] = useState<AnswerFeedback | null>(null)
   const [feedbackOpen, setFeedbackOpen] = useState(false)
 
@@ -47,16 +50,23 @@ export function SimulationScreen() {
     const practiceKey = `${scenarioId}:${mode}`
     if (initializedPractice.current === practiceKey) return
     initializedPractice.current = practiceKey
-    getSimulation(scenarioId, mode).then((s) => {
-      if (!s) return
-      setSession(s)
-      setMessages(s.messages)
-      if (mode === 'continue') {
-        // Arriving mid-conversation, the design shows the chat already opened up.
-        portraitHeight.set(PORTRAIT_SHORT)
-      }
-    })
-  }, [scenarioId, mode, portraitHeight])
+    setLoadError('')
+    getSimulation(scenarioId, mode)
+      .then((s) => {
+        if (!s) throw new Error('시나리오에 연결된 대화 상대가 없습니다.')
+        setSession(s)
+        setMessages(s.messages)
+        if (mode === 'continue') {
+          // Arriving mid-conversation, the design shows the chat already opened up.
+          portraitHeight.set(PORTRAIT_SHORT)
+        }
+      })
+      .catch((reason) => {
+        setLoadError(
+          reason instanceof Error ? reason.message : '대화방을 열지 못했습니다.',
+        )
+      })
+  }, [scenarioId, mode, portraitHeight, loadAttempt])
 
   useEffect(() => {
     const el = scrollRef.current
@@ -76,13 +86,30 @@ export function SimulationScreen() {
 
   async function submit() {
     const text = draft.trim()
-    if (!text || sending) return
+    if (!text || sending || !session) return
     setDraft('')
     setSending(true)
-    if (!session) return
-    const appended = await sendMessage(session.roomId, text)
-    setMessages((prev) => [...prev, ...appended])
-    setSending(false)
+    setMessageError('')
+    try {
+      const appended = await sendMessage(session.roomId, text)
+      setMessages((prev) => [...prev, ...appended])
+      setSession((current) => {
+        if (!current) return current
+        const nextStep = Math.min(current.step + 1, current.totalSteps)
+        return {
+          ...current,
+          step: nextStep,
+          completed: nextStep >= current.totalSteps,
+        }
+      })
+    } catch (reason) {
+      setDraft(text)
+      setMessageError(
+        reason instanceof Error ? reason.message : '메시지를 보내지 못했습니다.',
+      )
+    } finally {
+      setSending(false)
+    }
   }
 
   async function openFeedback() {
@@ -91,7 +118,41 @@ export function SimulationScreen() {
     setFeedbackOpen(true)
   }
 
-  if (!session) return <div className="flex-1 bg-bg" />
+  if (!session) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center bg-bg px-8 text-center">
+        {loadError ? (
+          <>
+            <h1 className="text-lg font-bold text-ink">대화방을 열지 못했어요</h1>
+            <p role="alert" className="mt-2 text-sm leading-body text-muted">
+              {loadError}
+            </p>
+            <div className="mt-6 flex gap-2">
+              <button
+                type="button"
+                onClick={() => navigate(-1)}
+                className="rounded-xl border border-line bg-surface px-4 py-2.5 text-sm font-semibold text-ink-2"
+              >
+                이전 화면
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  initializedPractice.current = null
+                  setLoadAttempt((value) => value + 1)
+                }}
+                className="rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-white"
+              >
+                다시 시도
+              </button>
+            </div>
+          </>
+        ) : (
+          <p className="text-sm font-medium text-muted">대화방을 준비하고 있어요…</p>
+        )}
+      </div>
+    )
+  }
 
   return (
     <div className="relative flex h-full flex-col bg-bg">
@@ -126,12 +187,19 @@ export function SimulationScreen() {
 
       {/* Goal pill */}
       <div className="shrink-0 px-5 pt-3">
-        <span className="inline-flex items-center gap-[7px] rounded-full bg-primary/10 px-3 py-[7px]">
-          <span className="block h-1.5 w-1.5 rounded-full bg-primary" />
-          <span className="text-2xs font-medium text-primary-deeper">
-            {session.goalLabel}
+        <div className="flex flex-wrap gap-2">
+          <span className="inline-flex items-center gap-[7px] rounded-full bg-primary/10 px-3 py-[7px]">
+            <span className="block h-1.5 w-1.5 rounded-full bg-primary" />
+            <span className="text-2xs font-medium text-primary-deeper">
+              {session.goalLabel}
+            </span>
           </span>
-        </span>
+          <span className="inline-flex items-center rounded-full bg-surface-sunken px-3 py-[7px] text-2xs font-medium text-muted">
+            {session.guest
+              ? `게스트 체험 · ${session.totalSteps}턴`
+              : `로그인 연습 · ${session.totalSteps}턴`}
+          </span>
+        </div>
       </div>
 
       {/* Portrait */}
@@ -168,7 +236,9 @@ export function SimulationScreen() {
                   key={i}
                   className={cn(
                     'block h-[7px] w-[7px] rounded-full transition-colors duration-200 ease-figma',
-                    i === session.step ? 'bg-primary' : 'bg-[#282112]/18',
+                    i === Math.min(session.step, session.totalSteps - 1)
+                      ? 'bg-primary'
+                      : 'bg-[#282112]/18',
                   )}
                 />
               ))}
@@ -238,6 +308,11 @@ export function SimulationScreen() {
 
       {/* Input bar */}
       <div className="flex h-[104px] shrink-0 flex-col gap-2 px-[18px] pt-2.5 pb-4">
+        {messageError && (
+          <p role="alert" className="text-center text-xs text-hard-ink">
+            {messageError}
+          </p>
+        )}
         <form
           className="flex items-center gap-2.5"
           onSubmit={(e) => {
@@ -256,8 +331,9 @@ export function SimulationScreen() {
             <input
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
-              placeholder="메시지 입력…"
+              placeholder={session.completed ? '연습이 종료되었습니다' : '메시지 입력…'}
               aria-label="메시지 입력"
+              disabled={session.completed}
               className="min-w-0 flex-1 bg-transparent text-base text-ink outline-none placeholder:text-muted"
             />
           </div>
@@ -275,7 +351,7 @@ export function SimulationScreen() {
           <motion.button
             type="submit"
             aria-label="보내기"
-            disabled={!draft.trim() || sending}
+            disabled={!draft.trim() || sending || session.completed}
             whileTap={{ scale: PRESS.icon }}
             transition={T.instant}
             className="flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-full bg-primary text-white shadow-cta transition-opacity duration-200 ease-figma disabled:opacity-60"

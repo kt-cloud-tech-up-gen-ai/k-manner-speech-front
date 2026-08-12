@@ -73,6 +73,16 @@ export const useAppStore = create<AppState>()(
 
       reset: () => set({ ...INITIAL }),
     }),
-    { name: 'k-manner-speech' },
+    {
+      name: 'k-manner-speech',
+      // 로그인 여부의 원본은 서버의 HttpOnly 세션 쿠키다. 브라우저 저장소에 남은
+      // signedIn=true를 복원하면 만료된 세션도 로그인처럼 보이므로 항상 false로 시작해
+      // App의 /auth/me 확인 결과로만 다시 true가 되게 한다.
+      merge: (persisted, current) => ({
+        ...current,
+        ...(persisted as Partial<AppState>),
+        signedIn: false,
+      }),
+    },
   ),
 )

@@ -87,6 +87,7 @@ export interface ChatMessage {
 export interface SimulationSession {
   roomId: string
   scenarioId: string
+  guest: boolean
   persona: Persona
   goalLabel: string
   /** "02:14" */

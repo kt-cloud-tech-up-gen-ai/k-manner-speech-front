@@ -32,11 +32,14 @@ const personaFromApi = (value: ApiPersona): Persona => ({
 const scenarioFromApi = (value: ApiScenario, personaId: string): Scenario => ({
   id: value.id,
   personaId,
-  title: { ko: value.description, en: value.description },
-  goal: 'communication_goal' in value ? value.communication_goal : value.description,
-  difficulty: 'easy',
-  estimatedMinutes: Math.max(1, Math.ceil((('max_turns' in value ? value.max_turns : 6)) / 2)),
-  recommended: false,
+  title: { ko: value.title_ko, en: value.title_en ?? '' },
+  goal: value.communication_goal,
+  difficulty: value.difficulty === 'medium' || value.difficulty === 'hard'
+    ? value.difficulty
+    : 'easy',
+  estimatedMinutes: value.estimated_minutes
+    ?? Math.max(1, Math.ceil((('max_turns' in value ? value.max_turns : 6)) / 2)),
+  recommended: value.is_featured,
   inProgress: false,
   requiresLogin: false,
 })
@@ -65,8 +68,8 @@ export const updateProfile = (profile: unknown) =>
   apiRequest('/auth/me/profile', { method: 'PUT', body: profile })
 
 const goalMap: Record<string, string> = {
-  work: 'business', dating: 'daily_conversation', smalltalk: 'daily_conversation',
-  requests: 'daily_conversation', service: 'business', honorifics: 'culture', other: 'other',
+  work: 'work_interview', dating: 'dating_first_impression', smalltalk: 'small_talk',
+  requests: 'requests_refusals', service: 'service_complaints', honorifics: 'honorifics', other: 'other',
 }
 const paceMap: Record<string, string> = {
   light: 'weekly', steady: 'three_per_week', focused: 'five_per_week',
@@ -110,19 +113,20 @@ export async function getSimulation(
   if (mode === 'continue') {
     const rooms = await apiRequest<{ rooms: ApiRoom[] }>('/rooms')
     room = rooms.rooms.find((candidate) => candidate.scenario_id === scenarioId && candidate.status === 'in_progress')
-      ?? await apiRequest<ApiRoom>('/rooms', { method: 'POST', body: { persona_id: personaApi.id, scenario_id: scenarioId, name: scenario.description } })
+      ?? await apiRequest<ApiRoom>('/rooms', { method: 'POST', body: { persona_id: personaApi.id, scenario_id: scenarioId, name: scenario.title_ko } })
   } else {
-    room = await apiRequest<ApiRoom>('/rooms', { method: 'POST', body: { persona_id: personaApi.id, scenario_id: scenarioId, name: scenario.description } })
+    room = await apiRequest<ApiRoom>('/rooms', { method: 'POST', body: { persona_id: personaApi.id, scenario_id: scenarioId, name: scenario.title_ko } })
   }
   const history = await apiRequest<{ messages: ApiMessage[] }>(`/rooms/${room.id}/messages`)
   return {
     roomId: room.id,
     scenarioId,
+    guest: room.guest,
     persona: personaFromApi(personaApi),
     goalLabel: `목표 · ${scenario.communication_goal}`,
     elapsed: '00:00', expression: '표정 · 미소', step: room.turn_count,
-    totalSteps: room.guest ? 3 : (scenario.max_turns ?? 5),
-    completed: room.status === 'completed',
+    totalSteps: room.guest ? Math.min(3, scenario.max_turns ?? 3) : (scenario.max_turns ?? 5),
+    completed: room.status !== 'in_progress',
     messages: history.messages.map(messageFromApi),
   }
 }
