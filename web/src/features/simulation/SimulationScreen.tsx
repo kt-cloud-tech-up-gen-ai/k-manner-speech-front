@@ -3,6 +3,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { animate, motion, useMotionValue } from 'motion/react'
 import { getAnswerFeedback, getSimulation, sendMessage } from '@/api/client'
 import type { AnswerFeedback, ChatMessage, SimulationSession } from '@/api/types'
+import { Button } from '@/components/ui/Button'
 import { Chip } from '@/components/ui/Chip'
 import { Icon } from '@/components/ui/Icon'
 import { cn } from '@/lib/cn'
@@ -37,6 +38,9 @@ export function SimulationScreen() {
   const [sending, setSending] = useState(false)
   const [feedback, setFeedback] = useState<AnswerFeedback | null>(null)
   const [feedbackOpen, setFeedbackOpen] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
+  const [retryCount, setRetryCount] = useState(0)
 
   const portraitHeight = useMotionValue(PORTRAIT_TALL)
   const dragOrigin = useRef(PORTRAIT_TALL)
@@ -44,19 +48,28 @@ export function SimulationScreen() {
   const initializedPractice = useRef<string | null>(null)
 
   useEffect(() => {
-    const practiceKey = `${scenarioId}:${mode}`
+    const practiceKey = `${scenarioId}:${mode}:${retryCount}`
     if (initializedPractice.current === practiceKey) return
     initializedPractice.current = practiceKey
-    getSimulation(scenarioId, mode).then((s) => {
-      if (!s) return
-      setSession(s)
-      setMessages(s.messages)
-      if (mode === 'continue') {
-        // Arriving mid-conversation, the design shows the chat already opened up.
-        portraitHeight.set(PORTRAIT_SHORT)
-      }
-    })
-  }, [scenarioId, mode, portraitHeight])
+    setLoading(true)
+    setLoadError('')
+    void getSimulation(scenarioId, mode)
+      .then((s) => {
+        if (!s) throw new Error('연습 정보를 불러올 수 없습니다.')
+        setSession(s)
+        setMessages(s.messages)
+        if (mode === 'continue') {
+          // Arriving mid-conversation, the design shows the chat already opened up.
+          portraitHeight.set(PORTRAIT_SHORT)
+        }
+      })
+      .catch((reason: unknown) => {
+        setLoadError(
+          reason instanceof Error ? reason.message : '연습 정보를 불러올 수 없습니다.',
+        )
+      })
+      .finally(() => setLoading(false))
+  }, [scenarioId, mode, portraitHeight, retryCount])
 
   useEffect(() => {
     const el = scrollRef.current
@@ -91,7 +104,40 @@ export function SimulationScreen() {
     setFeedbackOpen(true)
   }
 
-  if (!session) return <div className="flex-1 bg-bg" />
+  if (loading) {
+    return (
+      <div className="flex h-full items-center justify-center bg-bg px-7">
+        <p role="status" className="text-center text-sm font-medium text-muted-2">
+          연습을 준비하고 있어요
+        </p>
+      </div>
+    )
+  }
+
+  if (loadError || !session) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center bg-bg px-7 text-center">
+        <p role="alert" className="text-base font-semibold text-ink">
+          {loadError || '연습 정보를 불러올 수 없습니다.'}
+        </p>
+        <p className="mt-2 text-sm text-muted-2">잠시 후 다시 시도해 주세요.</p>
+        <div className="mt-6 flex w-full flex-col gap-3">
+          <Button
+            size="md"
+            onClick={() => {
+              initializedPractice.current = null
+              setRetryCount((count) => count + 1)
+            }}
+          >
+            다시 시도
+          </Button>
+          <Button variant="ghost" size="md" onClick={() => navigate('/personas')}>
+            시나리오 목록
+          </Button>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="relative flex h-full flex-col bg-bg">
