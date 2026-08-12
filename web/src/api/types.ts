@@ -85,6 +85,7 @@ export interface ChatMessage {
 }
 
 export interface SimulationSession {
+  roomId: string
   scenarioId: string
   persona: Persona
   goalLabel: string
@@ -95,6 +96,7 @@ export interface SimulationSession {
   step: number
   totalSteps: number
   messages: ChatMessage[]
+  completed: boolean
 }
 
 /** The P09 "답변 피드백" sheet: a pronunciation report over one recording. */

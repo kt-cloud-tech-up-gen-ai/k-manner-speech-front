@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'motion/react'
-import { getPaceOptions } from '@/api/client'
+import { getPaceOptions, logout, withdraw } from '@/api/client'
 import type { PaceOption } from '@/api/types'
 import { ScreenBody } from '@/components/shell/Screen'
 import { TitlePair } from '@/components/ui/Card'
@@ -35,6 +35,7 @@ export function SettingsScreen() {
   const [paceOptions, setPaceOptions] = useState<PaceOption[]>([])
   const [languageOpen, setLanguageOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
+  const [accountError, setAccountError] = useState('')
 
   useEffect(() => {
     getPaceOptions().then(setPaceOptions)
@@ -43,6 +44,29 @@ export function SettingsScreen() {
   const paceOption = paceOptions.find((p) => p.id === pace)
   const paceLabel = paceOption ? `주 ${paceOption.times}회` : '미설정'
   const localeLabel = locale === 'ko' ? '한국어 · KO' : 'English · EN'
+
+  const handleLogout = async () => {
+    setAccountError('')
+    try {
+      await logout()
+      signOut()
+      navigate('/login', { replace: true })
+    } catch {
+      setAccountError('로그아웃하지 못했습니다. 잠시 후 다시 시도해 주세요.')
+    }
+  }
+
+  const handleDelete = async () => {
+    setAccountError('')
+    try {
+      if (signedIn) await withdraw()
+      setDeleteOpen(false)
+      reset()
+      navigate('/splash', { replace: true })
+    } catch {
+      setAccountError('회원탈퇴를 완료하지 못했습니다. 잠시 후 다시 시도해 주세요.')
+    }
+  }
 
   return (
     <div className="flex h-full flex-col bg-bg">
@@ -134,10 +158,7 @@ export function SettingsScreen() {
                 chevron={false}
                 title={signedIn ? '로그아웃' : '로그인'}
                 tone="muted"
-                onClick={() => {
-                  if (signedIn) signOut()
-                  else navigate('/login')
-                }}
+                onClick={() => void (signedIn ? handleLogout() : navigate('/login'))}
               />
               <SettingsRow
                 title={signedIn ? '회원탈퇴' : '게스트 데이터 삭제'}
@@ -147,6 +168,11 @@ export function SettingsScreen() {
                 onClick={() => setDeleteOpen(true)}
               />
             </SettingsGroup>
+            {accountError ? (
+              <p className="px-4 pt-2 text-sm text-danger-ink" role="alert">
+                {accountError}
+              </p>
+            ) : null}
           </motion.div>
         </motion.div>
       </ScreenBody>
@@ -173,11 +199,7 @@ export function SettingsScreen() {
         confirmLabel={signedIn ? '탈퇴' : '삭제'}
         destructive
         onCancel={() => setDeleteOpen(false)}
-        onConfirm={() => {
-          setDeleteOpen(false)
-          reset()
-          navigate('/splash', { replace: true })
-        }}
+        onConfirm={() => void handleDelete()}
       />
     </div>
   )

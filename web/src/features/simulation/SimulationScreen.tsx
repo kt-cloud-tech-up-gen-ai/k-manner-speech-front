@@ -41,8 +41,12 @@ export function SimulationScreen() {
   const portraitHeight = useMotionValue(PORTRAIT_TALL)
   const dragOrigin = useRef(PORTRAIT_TALL)
   const scrollRef = useRef<HTMLDivElement>(null)
+  const initializedPractice = useRef<string | null>(null)
 
   useEffect(() => {
+    const practiceKey = `${scenarioId}:${mode}`
+    if (initializedPractice.current === practiceKey) return
+    initializedPractice.current = practiceKey
     getSimulation(scenarioId, mode).then((s) => {
       if (!s) return
       setSession(s)
@@ -75,13 +79,15 @@ export function SimulationScreen() {
     if (!text || sending) return
     setDraft('')
     setSending(true)
-    const appended = await sendMessage(text)
+    if (!session) return
+    const appended = await sendMessage(session.roomId, text)
     setMessages((prev) => [...prev, ...appended])
     setSending(false)
   }
 
   async function openFeedback() {
-    if (!feedback) setFeedback(await getAnswerFeedback())
+    if (!session) return
+    if (!feedback) setFeedback(await getAnswerFeedback(session.roomId))
     setFeedbackOpen(true)
   }
 

@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'motion/react'
 import { ScreenBody } from '@/components/shell/Screen'
@@ -5,6 +6,7 @@ import { Stepper } from '@/components/shell/TopBar'
 import { Button } from '@/components/ui/Button'
 import { EASE_OUT } from '@/lib/motion'
 import { useAppStore } from '@/store/useAppStore'
+import { saveOnboarding } from '@/api/client'
 
 const BULLETS = [
   '선택한 빈도에 맞춘 연습 알림',
@@ -20,9 +22,26 @@ export function NotificationsScreen() {
   const navigate = useNavigate()
   const setNotifications = useAppStore((s) => s.setNotifications)
   const completeOnboarding = useAppStore((s) => s.completeOnboarding)
+  const signedIn = useAppStore((s) => s.signedIn)
+  const onboardingState = useAppStore((s) => ({
+    locale: s.locale,
+    purposes: s.purposes,
+    purposeOther: s.purposeOther,
+    pace: s.pace,
+    profile: s.profile,
+  }))
+  const [error, setError] = useState('')
 
-  function finish(allowed: boolean) {
+  async function finish(allowed: boolean) {
     setNotifications(allowed)
+    if (signedIn) {
+      try {
+        await saveOnboarding({ ...onboardingState, notificationsAllowed: allowed })
+      } catch (reason) {
+        setError(reason instanceof Error ? reason.message : '저장할 수 없습니다.')
+        return
+      }
+    }
     completeOnboarding()
     navigate('/home')
   }
@@ -94,6 +113,7 @@ export function NotificationsScreen() {
       </ScreenBody>
 
       <footer className="flex shrink-0 flex-col gap-3 px-[26px] pt-2 pb-[30px]">
+        {error && <p role="alert" className="text-sm text-hard-ink">{error}</p>}
         <Button variant="ghost" size="md" onClick={() => finish(false)}>
           나중에 · Not now
         </Button>
