@@ -1,6 +1,8 @@
 import { expect, test, type Page } from '@playwright/test'
 
-const apiBaseUrl = 'http://localhost:8000'
+import { E2E_CONFIG } from '../e2eConfig'
+
+const apiBaseUrl = E2E_CONFIG.apiUrl
 
 async function startFirstPractice(page: Page) {
   await page.goto('/personas')

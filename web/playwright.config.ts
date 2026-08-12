@@ -2,8 +2,11 @@ import { defineConfig, devices } from '@playwright/test'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 
+import { E2E_CONFIG } from './e2eConfig'
+
 const webRoot = path.dirname(fileURLToPath(import.meta.url))
-const apiRoot = path.resolve(webRoot, '../../k-manner-speech-api')
+const apiOrigin = new URL(E2E_CONFIG.apiUrl)
+const webOrigin = new URL(E2E_CONFIG.webUrl)
 
 export default defineConfig({
   testDir: './e2e',
@@ -13,22 +16,22 @@ export default defineConfig({
   workers: 1,
   reporter: 'list',
   use: {
-    baseURL: 'http://localhost:5173',
+    baseURL: E2E_CONFIG.webUrl,
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
   },
   webServer: [
     {
-      command: 'uv run --with-requirements requirements.txt uvicorn app.main:app --env-file .env --host 127.0.0.1 --port 8000',
-      cwd: apiRoot,
-      url: 'http://127.0.0.1:8000/health',
+      command: `uv run --with-requirements requirements.txt uvicorn app.main:app --env-file .env --host ${apiOrigin.hostname} --port ${apiOrigin.port}`,
+      cwd: E2E_CONFIG.apiRoot,
+      url: E2E_CONFIG.apiHealthUrl,
       reuseExistingServer: false,
       timeout: 120_000,
     },
     {
-      command: 'npm run dev -- --host localhost --port 5173',
+      command: `npm run dev -- --host ${webOrigin.hostname} --port ${webOrigin.port}`,
       cwd: webRoot,
-      url: 'http://localhost:5173',
+      url: E2E_CONFIG.webUrl,
       reuseExistingServer: false,
       timeout: 120_000,
     },

@@ -21,6 +21,12 @@ migrations and API server first, then start Vite at `http://localhost:5173`.
 Authentication uses email/password and server-issued HttpOnly access/refresh
 cookies. State-changing requests also send the double-submit CSRF header.
 
+Live E2E keeps local defaults (`http://localhost:8000`,
+`http://localhost:5173`, and the sibling `k-manner-speech-api` checkout). CI or
+another checkout layout can override them with `E2E_API_URL`, `E2E_WEB_URL`,
+and the absolute `E2E_API_ROOT` environment variable. The Playwright servers
+and live spec consume the same values.
+
 ## Stack
 
 React 19 · TypeScript · Vite · Tailwind CSS v4 · React Router v7 · Motion
@@ -115,6 +121,8 @@ stroked to `score / 100`.
 `python3 scripts/figma/sync.py all` (from the repo root) refreshes
 `.figma/` with the per-frame spec, the token frequency report, the prototype
 graph and PNG@2x of every frame. Needs `FIGMA_TOKEN` in the repo `.env`.
+`FIGMA_FILE_KEY` optionally selects another file; when omitted, the current
+K speech file remains the development default. See the root `.env.example`.
 
 ## Storybook
 

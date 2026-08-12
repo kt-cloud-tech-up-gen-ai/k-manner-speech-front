@@ -28,10 +28,21 @@ import sys
 import urllib.parse
 import urllib.request
 
-FILE_KEY = 'wcovSZfRWLwPfTx82mRRS1'
+DEFAULT_FILE_KEY = 'wcovSZfRWLwPfTx82mRRS1'
+FILE_KEY = os.environ.get('FIGMA_FILE_KEY', DEFAULT_FILE_KEY)
+FIGMA_API_BASE_URL = 'https://api.figma.com/v1'
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 OUT = os.path.join(REPO, '.figma')
 FULL = os.path.join(OUT, 'full.json')
+
+
+def file_url():
+    return '%s/files/%s' % (FIGMA_API_BASE_URL, FILE_KEY)
+
+
+def images_url(node_ids):
+    return '%s/images/%s?ids=%s&format=png&scale=2' % (
+        FIGMA_API_BASE_URL, FILE_KEY, urllib.parse.quote(','.join(node_ids)))
 
 
 def token():
@@ -63,7 +74,7 @@ def load():
 # --------------------------------------------------------------------------- fetch
 def cmd_fetch():
     os.makedirs(OUT, exist_ok=True)
-    data = api('https://api.figma.com/v1/files/%s' % FILE_KEY)
+    data = api(file_url())
     json.dump(data, open(FULL, 'w'), ensure_ascii=False)
     print('%s  (%s, modified %s)' % (FULL, data.get('name'), data.get('lastModified')))
 
@@ -351,8 +362,7 @@ def cmd_frames():
     done = 0
     for i in range(0, len(targets), 12):
         chunk = targets[i:i + 12]
-        url = 'https://api.figma.com/v1/images/%s?ids=%s&format=png&scale=2' % (
-            FILE_KEY, urllib.parse.quote(','.join(c[0] for c in chunk)))
+        url = images_url([c[0] for c in chunk])
         images = (api(url).get('images') or {})
         for node_id, name in chunk:
             src = images.get(node_id)
