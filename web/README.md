@@ -1,9 +1,9 @@
 # K-Manner Speech — web
 
-v0.0.1-dev screens (KAN-17), built from the Figma file **K speech**
-(`wcovSZfRWLwPfTx82mRRS1`). No server integration yet: every screen reads
-through `src/api/client.ts`, which returns fixture data in the shape the API
-server (KAN-19) is expected to return.
+The app is connected to the sibling FastAPI service. Runtime catalog, room,
+conversation, authentication, onboarding/profile, and member feedback requests
+use the real API; fixtures remain for tests, Storybook, and the explicitly
+deferred result screen only.
 
 ```bash
 npm install
@@ -11,7 +11,15 @@ npm run dev          # app        — http://localhost:5173
 npm run storybook    # components — http://localhost:6006
 npm run build
 npm run lint
+npm test             # Vitest + Testing Library
+npm run api:generate # generate TypeScript from the FastAPI OpenAPI document
+npm run api:check    # fail when the checked-in generated contract is stale
 ```
+
+Create `web/.env.local` with `VITE_API_URL=http://localhost:8000`, run the API
+migrations and API server first, then start Vite at `http://localhost:5173`.
+Authentication uses email/password and server-issued HttpOnly access/refresh
+cookies. State-changing requests also send the double-submit CSRF header.
 
 ## Stack
 

@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useEffect, useRef } from 'react'
 import {
   BrowserRouter,
   Navigate,
@@ -13,6 +13,8 @@ import { StatusBar } from '@/components/shell/StatusBar'
 import { TabBar } from '@/components/shell/TabBar'
 import { T, dissolveVariants, pushVariants, routeDepth } from '@/lib/motion'
 import { routeMeta } from './routeMeta'
+import { getMe } from '@/api/client'
+import { useAppStore } from '@/store/useAppStore'
 
 import { SplashScreen } from '@/features/splash/SplashScreen'
 import { LanguageScreen } from '@/features/onboarding/LanguageScreen'
@@ -35,6 +37,26 @@ import { LegalScreen } from '@/features/legal/LegalScreen'
 function AppFrame() {
   const location = useLocation()
   const meta = routeMeta(location.pathname)
+  const signIn = useAppStore((state) => state.signIn)
+  const signOut = useAppStore((state) => state.signOut)
+  const updateProfile = useAppStore((state) => state.updateProfile)
+
+  useEffect(() => {
+    getMe()
+      .then((value) => {
+        const storedGender = value.profile.gender
+        const gender = storedGender === 'female' || storedGender === 'male'
+          ? storedGender
+          : 'undisclosed'
+        signIn()
+        updateProfile({
+          name: value.profile.name ?? '',
+          age: value.profile.age ?? 24,
+          gender,
+        })
+      })
+      .catch(() => signOut())
+  }, [signIn, signOut, updateProfile])
 
   const depth = routeDepth(location.pathname)
   const previousDepth = useRef(depth)

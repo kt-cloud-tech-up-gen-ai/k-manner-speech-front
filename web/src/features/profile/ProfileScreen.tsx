@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/Button'
 import { cn } from '@/lib/cn'
 import { PRESS, T } from '@/lib/motion'
 import { useAppStore } from '@/store/useAppStore'
+import { updateProfile as saveProfile } from '@/api/client'
 
 const GENDERS: Array<{ id: Gender; label: string }> = [
   { id: 'female', label: '여성' },
@@ -34,7 +35,13 @@ export function ProfileScreen() {
   const [gender, setGender] = useState<Gender>(profile.gender)
   const [age, setAge] = useState(String(profile.age))
 
-  function save() {
+  async function save() {
+    await saveProfile({
+      name, age: Number(age) || profile.age, learning_goal_other: null,
+      native_language: null,
+      gender: gender === 'undisclosed' ? 'prefer_not_to_say' : gender,
+      learning_goals: [], study_frequency: null, push_enabled: false,
+    })
     updateProfile({ name, gender, age: Number(age) || profile.age })
     navigate(-1)
   }
