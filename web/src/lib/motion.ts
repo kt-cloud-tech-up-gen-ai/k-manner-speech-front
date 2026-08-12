@@ -101,7 +101,6 @@ const DEPTH: Array<[RegExp, number]> = [
   [/^\/personas$/, 6],
   [/^\/personas\/[^/]+$/, 7],
   [/^\/simulation\/[^/]+$/, 8],
-  [/^\/result\/[^/]+$/, 9],
   [/^\/trial/, 8],
   [/^\/settings$/, 6.1],
   [/^\/profile$/, 7],

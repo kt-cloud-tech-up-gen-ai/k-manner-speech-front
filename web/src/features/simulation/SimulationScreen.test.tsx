@@ -7,7 +7,8 @@ import { SimulationScreen } from './SimulationScreen'
 
 const api = vi.hoisted(() => ({
   getSimulation: vi.fn(),
-  sendMessage: vi.fn(),
+  processTextTurn: vi.fn(),
+  processVoiceTurn: vi.fn(),
   getAnswerFeedback: vi.fn(),
 }))
 
