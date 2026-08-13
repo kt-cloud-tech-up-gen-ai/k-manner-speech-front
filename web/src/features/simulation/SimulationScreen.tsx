@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { animate, motion, useMotionValue } from 'motion/react'
-import { getAnswerFeedback, getSimulation, sendMessage } from '@/api/client'
+import { getSimulation, processTextTurn, processVoiceTurn } from '@/api/client'
 import type { AnswerFeedback, ChatMessage, SimulationSession } from '@/api/types'
 import { Button } from '@/components/ui/Button'
 import { Chip } from '@/components/ui/Chip'
@@ -36,6 +36,8 @@ export function SimulationScreen() {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [draft, setDraft] = useState('')
   const [sending, setSending] = useState(false)
+  const [listening, setListening] = useState(false)
+  const [inputError, setInputError] = useState('')
   const [feedback, setFeedback] = useState<AnswerFeedback | null>(null)
   const [feedbackOpen, setFeedbackOpen] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -46,6 +48,13 @@ export function SimulationScreen() {
   const dragOrigin = useRef(PORTRAIT_TALL)
   const scrollRef = useRef<HTMLDivElement>(null)
   const initializedPractice = useRef<string | null>(null)
+  const recognitionRef = useRef<SpeechRecognition | null>(null)
+  const audioRef = useRef<HTMLAudioElement | null>(null)
+
+  useEffect(() => () => {
+    recognitionRef.current?.abort()
+    audioRef.current?.pause()
+  }, [])
 
   useEffect(() => {
     const practiceKey = `${scenarioId}:${mode}:${retryCount}`
@@ -87,20 +96,75 @@ export function SimulationScreen() {
     animate(portraitHeight, target, { duration: 0.3, ease: EASE_OUT })
   }
 
+  async function runTurn(text: string, inputType: 'text' | 'voice') {
+    if (!session || sending) return
+    setInputError('')
+    setSending(true)
+    const optimisticId = `local-${Date.now()}`
+    setMessages((prev) => [...prev, { id: optimisticId, role: 'user', text }])
+    setDraft('')
+    try {
+      const result = inputType === 'voice'
+        ? await processVoiceTurn(session.roomId, text)
+        : await processTextTurn(session.roomId, text)
+      setMessages((prev) => [
+        ...prev.filter((message) => message.id !== optimisticId),
+        ...result.messages,
+      ])
+    } catch (reason) {
+      setInputError(reason instanceof Error ? reason.message : '답변을 처리하지 못했습니다.')
+    } finally {
+      setSending(false)
+    }
+  }
+
+  function playAnswerAudio(url: string) {
+    audioRef.current?.pause()
+    const audio = new Audio(url)
+    audio.crossOrigin = 'use-credentials'
+    audioRef.current = audio
+    void audio.play().catch(() => setInputError('음성을 재생하지 못했습니다.'))
+  }
+
   async function submit() {
     const text = draft.trim()
     if (!text || sending) return
     setDraft('')
-    setSending(true)
-    if (!session) return
-    const appended = await sendMessage(session.roomId, text)
-    setMessages((prev) => [...prev, ...appended])
-    setSending(false)
+    await runTurn(text, 'text')
   }
 
-  async function openFeedback() {
-    if (!session) return
-    if (!feedback) setFeedback(await getAnswerFeedback(session.roomId))
+  function startVoiceInput() {
+    if (sending || listening) return
+    const Recognition = window.SpeechRecognition ?? window.webkitSpeechRecognition
+    if (!Recognition) {
+      setInputError('이 브라우저는 음성 인식을 지원하지 않습니다. Chrome 또는 Safari를 사용해 주세요.')
+      return
+    }
+    setInputError('')
+    const recognition = new Recognition()
+    recognition.lang = 'ko-KR'
+    recognition.interimResults = true
+    recognition.continuous = false
+    recognition.onstart = () => setListening(true)
+    recognition.onresult = (event) => {
+      let transcript = ''
+      for (let i = event.resultIndex; i < event.results.length; i += 1) {
+        transcript += event.results[i][0]?.transcript ?? ''
+      }
+      setDraft(transcript.trim())
+      const last = event.results[event.results.length - 1]
+      if (last?.isFinal && transcript.trim()) void runTurn(transcript.trim(), 'voice')
+    }
+    recognition.onerror = (event) => {
+      if (event.error !== 'aborted') setInputError(`음성 인식 오류: ${event.error}`)
+    }
+    recognition.onend = () => setListening(false)
+    recognitionRef.current = recognition
+    recognition.start()
+  }
+
+  function openFeedback(value: AnswerFeedback) {
+    setFeedback(value)
     setFeedbackOpen(true)
   }
 
@@ -146,8 +210,7 @@ export function SimulationScreen() {
         <motion.button
           type="button"
           onClick={() => {
-            // The result screen only makes sense once something was said.
-            if (messages.some((m) => m.role === 'user')) navigate(`/result/${scenarioId}`)
+            if (session) navigate(`/personas/${session.persona.id}`)
             else navigate(-1)
           }}
           aria-label="연습 종료"
@@ -259,7 +322,8 @@ export function SimulationScreen() {
             key={message.id}
             message={message}
             index={i}
-            onOpenFeedback={message.role === 'user' ? openFeedback : undefined}
+            onOpenFeedback={message.role === 'user' && message.feedback ? () => openFeedback(message.feedback!) : undefined}
+            onPlayAudio={playAnswerAudio}
           />
         ))}
 
@@ -311,9 +375,15 @@ export function SimulationScreen() {
           <motion.button
             type="button"
             aria-label="음성으로 답하기"
+            aria-pressed={listening}
+            onClick={() => listening ? recognitionRef.current?.stop() : startVoiceInput()}
+            disabled={sending}
             whileTap={{ scale: PRESS.icon }}
             transition={T.instant}
-            className="flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-full border border-[rgb(30_25_15/0.14)] bg-surface-input text-primary-strong"
+            className={cn(
+              'flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-full border border-[rgb(30_25_15/0.14)] text-primary-strong disabled:opacity-60',
+              listening ? 'bg-primary/15 ring-2 ring-primary/30' : 'bg-surface-input',
+            )}
           >
             <Icon name="mic" size={20} weight={1.8} />
           </motion.button>
@@ -330,8 +400,8 @@ export function SimulationScreen() {
           </motion.button>
         </form>
 
-        <p className="text-center text-xs text-muted">
-          마이크로 말하거나 입력 · 음성은 선택
+        <p role={inputError ? 'alert' : undefined} className={cn('text-center text-xs', inputError ? 'text-hard-ink' : 'text-muted')}>
+          {inputError || (listening ? '듣고 있어요… 말씀해 주세요' : '마이크로 말하거나 입력 · 음성은 선택')}
         </p>
       </div>
 

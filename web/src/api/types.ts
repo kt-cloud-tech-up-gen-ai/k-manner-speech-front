@@ -80,6 +80,10 @@ export interface ChatMessage {
   id: string
   role: ChatRole
   text: string
+  /** Generated persona WAV URL. Present for turns created by the integrated API. */
+  audioUrl?: string
+  /** Feedback returned with this turn, so opening it needs no extra request. */
+  feedback?: AnswerFeedback
   /** Romanised / translated helper line shown under persona lines. */
   hint?: string
 }

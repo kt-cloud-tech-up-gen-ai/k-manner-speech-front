@@ -24,7 +24,6 @@ const RULES: Array<[RegExp, RouteMeta]> = [
   [/^\/home/, { tabBar: true, statusTone: 'dark', transition: 'push' }],
   [/^\/personas/, { tabBar: true, statusTone: 'dark', transition: 'push' }],
   [/^\/simulation/, { tabBar: false, statusTone: 'dark', transition: 'push' }],
-  [/^\/result/, { tabBar: false, statusTone: 'dark', transition: 'push' }],
   [/^\/settings$/, { tabBar: true, statusTone: 'dark', transition: 'push' }],
   [/^\/settings\//, { tabBar: false, statusTone: 'dark', transition: 'push' }],
   [/^\/profile/, { tabBar: false, statusTone: 'dark', transition: 'push' }],

@@ -20,12 +20,35 @@ type ApiScenario = components['schemas']['ScenarioResponse'] | components['schem
 type ApiRoom = components['schemas']['RoomResponse']
 type ApiMessage = components['schemas']['ChatMessageResponse']
 
+type RoomTurnResponse = {
+  user_message: ApiMessage
+  assistant_message: ApiMessage
+  conversation: {
+    answer: string
+    response_style: string
+    audio: { audio_path: string }
+  }
+  feedback: {
+    score: number
+    summary: string
+    strengths: string[]
+    improvements: string[]
+    issues: Array<{ original: string; explanation: string; suggestion: string }>
+  }
+}
+
+export type ConversationTurn = {
+  messages: ChatMessage[]
+  audioUrl: string
+}
+
 const personaFromApi = (value: ApiPersona): Persona => ({
   id: value.id,
   name: [value.first_name, value.middle_name, value.last_name].filter(Boolean).join(' '),
   role: value.description,
   relationship: 'relationship_description' in value ? value.relationship_description : '대화 상대',
   contextLabel: `${value.first_name} · ${value.description}`,
+  portrait: (value as ApiPersona & { avatar_url?: string | null }).avatar_url ?? undefined,
   requiresLogin: false,
 })
 
@@ -99,6 +122,11 @@ export async function getScenarios(personaId: string): Promise<Scenario[]> {
   return ('scenarios' in persona ? persona.scenarios : []).map((scenario) => scenarioFromApi(scenario, personaId))
 }
 
+export async function getRooms(): Promise<ApiRoom[]> {
+  const data = await apiRequest<{ rooms: ApiRoom[] }>('/rooms')
+  return data.rooms
+}
+
 export async function getSimulation(
   scenarioId: string,
   mode: 'new' | 'continue',
@@ -131,6 +159,12 @@ const messageFromApi = (message: ApiMessage): ChatMessage => ({
   id: message.id,
   role: message.role === 'assistant' ? 'persona' : message.role as ChatMessage['role'],
   text: message.content,
+  audioUrl: (() => {
+    const path = (message as ApiMessage & { audio_url?: string | null }).audio_url
+    if (!path) return undefined
+    const apiUrl = import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
+    return `${apiUrl}${path}`
+  })(),
 })
 
 export async function sendMessage(roomId: string, text: string): Promise<ChatMessage[]> {
@@ -139,6 +173,49 @@ export async function sendMessage(roomId: string, text: string): Promise<ChatMes
   })
   return [{ id: `local-${Date.now()}`, role: 'user', text }, messageFromApi(result.message)]
 }
+
+async function processTurn(
+  roomId: string,
+  input: { type: 'text'; text: string } | { type: 'voice'; transcript: string },
+): Promise<ConversationTurn> {
+  const endpoint = input.type === 'voice' ? 'voice' : 'text'
+  const body = input.type === 'voice' ? { transcript: input.transcript } : { text: input.text }
+  const result = await apiRequest<RoomTurnResponse>(`/rooms/${roomId}/turns/${endpoint}`, {
+    method: 'POST',
+    body,
+  })
+  const assistantMessage = messageFromApi(result.assistant_message)
+  if (!assistantMessage.audioUrl) throw new Error('저장된 음성 파일을 찾을 수 없습니다.')
+  const feedback: AnswerFeedback = {
+    meta: input.type === 'voice' ? '마이크 입력 · 분석 완료' : '텍스트 입력 · 분석 완료',
+    durationSeconds: 0,
+    score: result.feedback.score / 10,
+    scoreOutOf: 10,
+    scoreLabel: result.feedback.score >= 80 ? '자연스러워요' : result.feedback.score >= 60 ? '좋아요' : '연습해 볼까요',
+    secondaryMetrics: '',
+    waveform: [],
+    errorRanges: [],
+    issues: result.feedback.issues.map((issue) => ({
+      timestamp: '표현',
+      word: issue.original,
+      guidance: `${issue.explanation} 제안: ${issue.suggestion}`,
+    })),
+    expression: [result.feedback.summary, ...result.feedback.improvements].filter(Boolean).join(' · '),
+  }
+  return {
+    messages: [
+      { ...messageFromApi(result.user_message), feedback },
+      assistantMessage,
+    ],
+    audioUrl: assistantMessage.audioUrl,
+  }
+}
+
+export const processTextTurn = (roomId: string, text: string) =>
+  processTurn(roomId, { type: 'text', text })
+
+export const processVoiceTurn = (roomId: string, transcript: string) =>
+  processTurn(roomId, { type: 'voice', transcript })
 
 export function getHomeSummary(): Promise<HomeSummary> { return Promise.resolve(HOME_SUMMARY) }
 export function getPurposeOptions(): Promise<PurposeOption[]> { return Promise.resolve(PURPOSE_OPTIONS) }

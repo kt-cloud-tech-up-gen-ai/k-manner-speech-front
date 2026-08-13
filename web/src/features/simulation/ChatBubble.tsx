@@ -4,14 +4,16 @@ import { cn } from '@/lib/cn'
 import { EASE_OUT, PRESS, T } from '@/lib/motion'
 
 /** 24x24 speaker button that sits beside each bubble. */
-function AudioButton({ label }: { label: string }) {
+function AudioButton({ label, onClick, disabled }: { label: string; onClick?: () => void; disabled?: boolean }) {
   return (
     <motion.button
       type="button"
       aria-label={label}
+      onClick={onClick}
+      disabled={disabled}
       whileTap={{ scale: PRESS.icon }}
       transition={T.instant}
-      className="flex h-6 w-6 shrink-0 items-center justify-center self-end rounded-full border border-handle bg-surface-sunken text-muted-2"
+      className="flex h-6 w-6 shrink-0 items-center justify-center self-end rounded-full border border-handle bg-surface-sunken text-muted-2 disabled:cursor-not-allowed disabled:opacity-40"
     >
       <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
         <path d="M2 5.2h2.4L7.4 2.6v8.8L4.4 8.8H2Z" fill="currentColor" />
@@ -36,10 +38,12 @@ export function ChatBubble({
   message,
   index,
   onOpenFeedback,
+  onPlayAudio,
 }: {
   message: ChatMessage
   index: number
   onOpenFeedback?: () => void
+  onPlayAudio?: (url: string) => void
 }) {
   const mine = message.role === 'user'
 
@@ -51,8 +55,6 @@ export function ChatBubble({
       transition={{ duration: 0.3, ease: EASE_OUT, delay: Math.min(index, 6) * 0.05 }}
       className={cn('flex items-end gap-2', mine ? 'justify-end' : 'justify-start')}
     >
-      {mine && <AudioButton label="내 답변 다시 듣기" />}
-
       <div
         className={cn(
           'font-splash max-w-[74%] px-3.5 py-[11px]',
@@ -92,7 +94,13 @@ export function ChatBubble({
         )}
       </div>
 
-      {!mine && <AudioButton label="다시 듣기" />}
+      {!mine && (
+        <AudioButton
+          label="도윤 답변 듣기"
+          disabled={!message.audioUrl}
+          onClick={message.audioUrl ? () => onPlayAudio?.(message.audioUrl!) : undefined}
+        />
+      )}
     </motion.div>
   )
 }

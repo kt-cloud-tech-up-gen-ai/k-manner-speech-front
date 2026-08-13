@@ -26,7 +26,6 @@ import { HomeScreen } from '@/features/home/HomeScreen'
 import { PersonasScreen } from '@/features/personas/PersonasScreen'
 import { ScenariosScreen } from '@/features/personas/ScenariosScreen'
 import { SimulationScreen } from '@/features/simulation/SimulationScreen'
-import { ResultScreen } from '@/features/simulation/ResultScreen'
 import { LoginScreen } from '@/features/auth/LoginScreen'
 import { ProfileScreen } from '@/features/profile/ProfileScreen'
 import { SettingsScreen } from '@/features/settings/SettingsScreen'
@@ -100,7 +99,6 @@ function AppFrame() {
               <Route path="/personas" element={<PersonasScreen />} />
               <Route path="/personas/:personaId" element={<ScenariosScreen />} />
               <Route path="/simulation/:scenarioId" element={<SimulationScreen />} />
-              <Route path="/result/:scenarioId" element={<ResultScreen />} />
 
               <Route path="/login" element={<LoginScreen />} />
               <Route path="/profile" element={<ProfileScreen />} />

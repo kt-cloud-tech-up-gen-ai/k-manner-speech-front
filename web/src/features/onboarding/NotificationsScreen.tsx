@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'motion/react'
-import { useShallow } from 'zustand/react/shallow'
 import { ScreenBody } from '@/components/shell/Screen'
 import { Stepper } from '@/components/shell/TopBar'
 import { Button } from '@/components/ui/Button'
@@ -24,22 +23,25 @@ export function NotificationsScreen() {
   const setNotifications = useAppStore((s) => s.setNotifications)
   const completeOnboarding = useAppStore((s) => s.completeOnboarding)
   const signedIn = useAppStore((s) => s.signedIn)
-  const onboardingState = useAppStore(
-    useShallow((s) => ({
-      locale: s.locale,
-      purposes: s.purposes,
-      purposeOther: s.purposeOther,
-      pace: s.pace,
-      profile: s.profile,
-    })),
-  )
+  const locale = useAppStore((s) => s.locale)
+  const purposes = useAppStore((s) => s.purposes)
+  const purposeOther = useAppStore((s) => s.purposeOther)
+  const pace = useAppStore((s) => s.pace)
+  const profile = useAppStore((s) => s.profile)
   const [error, setError] = useState('')
 
   async function finish(allowed: boolean) {
     setNotifications(allowed)
     if (signedIn) {
       try {
-        await saveOnboarding({ ...onboardingState, notificationsAllowed: allowed })
+        await saveOnboarding({
+          locale,
+          purposes,
+          purposeOther,
+          pace,
+          profile,
+          notificationsAllowed: allowed,
+        })
       } catch (reason) {
         setError(reason instanceof Error ? reason.message : '저장할 수 없습니다.')
         return

@@ -8,8 +8,8 @@ import { SimulationScreen } from './SimulationScreen'
 
 const api = vi.hoisted(() => ({
   getSimulation: vi.fn(),
-  sendMessage: vi.fn(),
-  getAnswerFeedback: vi.fn(),
+  processTextTurn: vi.fn(),
+  processVoiceTurn: vi.fn(),
 }))
 
 vi.mock('@/api/client', () => api)
@@ -33,8 +33,8 @@ describe('SimulationScreen initialization', () => {
 
   beforeEach(() => {
     api.getSimulation.mockReset()
-    api.sendMessage.mockReset()
-    api.getAnswerFeedback.mockReset()
+    api.processTextTurn.mockReset()
+    api.processVoiceTurn.mockReset()
   })
 
   function renderScreen() {

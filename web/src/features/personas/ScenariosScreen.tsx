@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { AnimatePresence, motion } from 'motion/react'
-import { getPersona, getScenarios } from '@/api/client'
+import { getPersona, getRooms, getScenarios } from '@/api/client'
 import type { Persona, Scenario } from '@/api/types'
 import { ScreenBody } from '@/components/shell/Screen'
 import { BackButton } from '@/components/shell/TopBar'
@@ -31,8 +31,22 @@ export function ScenariosScreen() {
   const [resumeTarget, setResumeTarget] = useState<Scenario | null>(null)
 
   useEffect(() => {
-    getPersona(personaId).then((p) => setPersona(p ?? null))
-    getScenarios(personaId).then(setScenarios)
+    Promise.all([getPersona(personaId), getScenarios(personaId), getRooms()]).then(
+      ([loadedPersona, loadedScenarios, rooms]) => {
+        setPersona(loadedPersona ?? null)
+        const activeScenarioIds = new Set(
+          rooms
+            .filter((room) => room.persona_id === personaId && room.status === 'in_progress')
+            .map((room) => room.scenario_id),
+        )
+        setScenarios(
+          loadedScenarios.map((scenario) => ({
+            ...scenario,
+            inProgress: activeScenarioIds.has(scenario.id),
+          })),
+        )
+      },
+    )
   }, [personaId])
 
   const filtered = useMemo(() => {
