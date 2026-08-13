@@ -5,13 +5,18 @@ import { fileURLToPath } from 'node:url'
 import openapiTS, { astToString } from 'openapi-typescript'
 
 const webRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
-const apiRoot = resolve(webRoot, '..', '..', 'k-manner-speech-api')
+const apiRoot = resolve(
+  process.env.K_MANNER_API_ROOT
+    ?? resolve(webRoot, '..', '..', '..', 'Basic_project_api', 'k-manner-speech-api'),
+)
 const output = resolve(webRoot, 'src', 'api', 'generated', 'schema.d.ts')
-const uvArgs = [
-  'run', '--with-requirements', 'requirements.txt', 'python', '-c',
-  'import json; from app.main import app; print(json.dumps(app.openapi()))',
-]
-const result = spawnSync('uv', uvArgs, {
+const exportCode = 'import json; from app.main import app; print(json.dumps(app.openapi()))'
+const python = process.env.K_MANNER_API_PYTHON
+const command = python ?? 'uv'
+const args = python
+  ? ['-c', exportCode]
+  : ['run', '--with-requirements', 'requirements.txt', 'python', '-c', exportCode]
+const result = spawnSync(command, args, {
   cwd: apiRoot,
   encoding: 'utf8',
   env: {
@@ -20,7 +25,9 @@ const result = spawnSync('uv', uvArgs, {
     UV_PYTHON_INSTALL_DIR: resolve(apiRoot, '.uv-python'),
   },
 })
-if (result.status !== 0) throw new Error(result.stderr || 'OpenAPI export failed')
+if (result.status !== 0) {
+  throw new Error(result.stderr || `OpenAPI export failed: ${command}`)
+}
 const schema = JSON.parse(result.stdout)
 const generated = astToString(await openapiTS(schema))
 

@@ -3,6 +3,11 @@ import { fileURLToPath } from 'node:url'
 
 type E2eEnvironment = Record<string, string | undefined>
 
+function resolvePath(value: string): string {
+  if (/^[A-Za-z]:[\\/]/.test(value)) return path.win32.resolve(value)
+  return path.resolve(value)
+}
+
 function origin(value: string): string {
   const parsed = new URL(value)
   if (parsed.pathname !== '/' || parsed.search || parsed.hash) {
@@ -15,8 +20,16 @@ export function createE2eConfig(env: E2eEnvironment, webRoot: string) {
   const apiUrl = origin(env.E2E_API_URL ?? 'http://localhost:8000')
   const webUrl = origin(env.E2E_WEB_URL ?? 'http://localhost:5173')
   const apiRoot = env.E2E_API_ROOT
-    ? path.resolve(env.E2E_API_ROOT)
-    : path.resolve(webRoot, '../../k-manner-speech-api')
+    ? resolvePath(env.E2E_API_ROOT)
+    : /^[A-Za-z]:[\\/]/.test(webRoot)
+      ? path.win32.resolve(
+          webRoot,
+          '../../../Basic_project_api/k-manner-speech-api',
+        )
+      : path.resolve(
+          webRoot,
+          '../../../Basic_project_api/k-manner-speech-api',
+        )
 
   return {
     apiUrl,

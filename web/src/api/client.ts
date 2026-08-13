@@ -19,27 +19,17 @@ type ApiPersona = components['schemas']['PersonaResponse'] | components['schemas
 type ApiScenario = components['schemas']['ScenarioResponse'] | components['schemas']['ScenarioSummaryResponse']
 type ApiRoom = components['schemas']['RoomResponse']
 type ApiMessage = components['schemas']['ChatMessageResponse']
-
-type RoomTurnResponse = {
-  user_message: ApiMessage
-  assistant_message: ApiMessage
-  conversation: {
-    answer: string
-    response_style: string
-    audio: { audio_path: string }
-  }
-  feedback: {
-    score: number
-    summary: string
-    strengths: string[]
-    improvements: string[]
-    issues: Array<{ original: string; explanation: string; suggestion: string }>
-  }
-}
+type RoomTurnResponse = components['schemas']['RoomTurnResponse']
 
 export type ConversationTurn = {
   messages: ChatMessage[]
   audioUrl: string
+}
+
+export type VoiceRecording = {
+  audioBase64: string
+  mimeType: string
+  durationSeconds: number
 }
 
 const personaFromApi = (value: ApiPersona): Persona => ({
@@ -176,10 +166,19 @@ export async function sendMessage(roomId: string, text: string): Promise<ChatMes
 
 async function processTurn(
   roomId: string,
-  input: { type: 'text'; text: string } | { type: 'voice'; transcript: string },
+  input:
+    | { type: 'text'; text: string }
+    | { type: 'voice'; transcript: string; recording: VoiceRecording },
 ): Promise<ConversationTurn> {
   const endpoint = input.type === 'voice' ? 'voice' : 'text'
-  const body = input.type === 'voice' ? { transcript: input.transcript } : { text: input.text }
+  const body = input.type === 'voice'
+    ? {
+        transcript: input.transcript,
+        audio_base64: input.recording.audioBase64,
+        audio_mime_type: input.recording.mimeType,
+        duration_seconds: input.recording.durationSeconds,
+      }
+    : { text: input.text }
   const result = await apiRequest<RoomTurnResponse>(`/rooms/${roomId}/turns/${endpoint}`, {
     method: 'POST',
     body,
@@ -187,19 +186,16 @@ async function processTurn(
   const assistantMessage = messageFromApi(result.assistant_message)
   if (!assistantMessage.audioUrl) throw new Error('저장된 음성 파일을 찾을 수 없습니다.')
   const feedback: AnswerFeedback = {
+    inputType: input.type,
     meta: input.type === 'voice' ? '마이크 입력 · 분석 완료' : '텍스트 입력 · 분석 완료',
-    durationSeconds: 0,
+    durationSeconds: input.type === 'voice' ? input.recording.durationSeconds : 0,
     score: result.feedback.score / 10,
     scoreOutOf: 10,
     scoreLabel: result.feedback.score >= 80 ? '자연스러워요' : result.feedback.score >= 60 ? '좋아요' : '연습해 볼까요',
     secondaryMetrics: '',
-    waveform: [],
-    errorRanges: [],
-    issues: result.feedback.issues.map((issue) => ({
-      timestamp: '표현',
-      word: issue.original,
-      guidance: `${issue.explanation} 제안: ${issue.suggestion}`,
-    })),
+    voiceEmotion: input.type === 'voice' && result.conversation.voice_emotion
+      ? result.conversation.voice_emotion
+      : undefined,
     expression: [result.feedback.summary, ...result.feedback.improvements].filter(Boolean).join(' · '),
   }
   return {
@@ -214,8 +210,11 @@ async function processTurn(
 export const processTextTurn = (roomId: string, text: string) =>
   processTurn(roomId, { type: 'text', text })
 
-export const processVoiceTurn = (roomId: string, transcript: string) =>
-  processTurn(roomId, { type: 'voice', transcript })
+export const processVoiceTurn = (
+  roomId: string,
+  transcript: string,
+  recording: VoiceRecording,
+) => processTurn(roomId, { type: 'voice', transcript, recording })
 
 export function getHomeSummary(): Promise<HomeSummary> { return Promise.resolve(HOME_SUMMARY) }
 export function getPurposeOptions(): Promise<PurposeOption[]> { return Promise.resolve(PURPOSE_OPTIONS) }
@@ -227,18 +226,17 @@ export function getPracticeResult(scenarioId: string): Promise<PracticeResult> {
 export async function getAnswerFeedback(roomId?: string): Promise<AnswerFeedback> {
   if (!roomId) {
     return {
-      meta: '체험 피드백', durationSeconds: 0, score: 8, scoreOutOf: 10,
-      scoreLabel: '자연스러워요', secondaryMetrics: '', waveform: [], errorRanges: [],
-      issues: [], expression: '로그인 후 실제 대화 피드백을 확인할 수 있어요.',
+      inputType: 'text', meta: '체험 피드백', durationSeconds: 0, score: 8, scoreOutOf: 10,
+      scoreLabel: '자연스러워요', secondaryMetrics: '',
+      expression: '로그인 후 실제 대화 피드백을 확인할 수 있어요.',
     }
   }
   const result = await apiRequest<{
     score: number; summary: string; issues: Array<{ original: string; explanation: string }>
   }>(`/rooms/${roomId}/feedback`, { method: 'POST' })
   return {
-    meta: '대화 분석 완료', durationSeconds: 0, score: result.score / 10, scoreOutOf: 10,
-    scoreLabel: result.summary, secondaryMetrics: '', waveform: [], errorRanges: [],
-    issues: result.issues.map((issue) => ({ timestamp: '', word: issue.original, guidance: issue.explanation })),
+    inputType: 'text', meta: '대화 분석 완료', durationSeconds: 0, score: result.score / 10, scoreOutOf: 10,
+    scoreLabel: result.summary, secondaryMetrics: '',
     expression: result.summary,
   }
 }

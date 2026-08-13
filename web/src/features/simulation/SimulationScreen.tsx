@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { animate, motion, useMotionValue } from 'motion/react'
 import { getSimulation, processTextTurn, processVoiceTurn } from '@/api/client'
+import type { VoiceRecording } from '@/api/client'
 import type { AnswerFeedback, ChatMessage, SimulationSession } from '@/api/types'
 import { Button } from '@/components/ui/Button'
 import { Chip } from '@/components/ui/Chip'
@@ -17,6 +18,13 @@ const PORTRAIT_SHORT = 152
 const SNAP_POINT = (PORTRAIT_TALL + PORTRAIT_SHORT) / 2
 
 const clamp = (v: number) => Math.min(PORTRAIT_TALL, Math.max(PORTRAIT_SHORT, v))
+
+const blobToBase64 = (blob: Blob) => new Promise<string>((resolve, reject) => {
+  const reader = new FileReader()
+  reader.onerror = () => reject(new Error('녹음 파일을 읽지 못했습니다.'))
+  reader.onloadend = () => resolve(String(reader.result).split(',', 2)[1] ?? '')
+  reader.readAsDataURL(blob)
+})
 
 /**
  * P09 · Simulation, covering P09.1 (continue), P09.2 (new), the P09A/P09.1A
@@ -50,9 +58,16 @@ export function SimulationScreen() {
   const initializedPractice = useRef<string | null>(null)
   const recognitionRef = useRef<SpeechRecognition | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const mediaStreamRef = useRef<MediaStream | null>(null)
+  const recordedChunksRef = useRef<Blob[]>([])
+  const voiceTranscriptRef = useRef('')
+  const recordingStartedAtRef = useRef(0)
 
   useEffect(() => () => {
     recognitionRef.current?.abort()
+    if (mediaRecorderRef.current?.state === 'recording') mediaRecorderRef.current.stop()
+    mediaStreamRef.current?.getTracks().forEach((track) => track.stop())
     audioRef.current?.pause()
   }, [])
 
@@ -96,16 +111,22 @@ export function SimulationScreen() {
     animate(portraitHeight, target, { duration: 0.3, ease: EASE_OUT })
   }
 
-  async function runTurn(text: string, inputType: 'text' | 'voice') {
+  async function runTurn(
+    text: string,
+    inputType: 'text' | 'voice',
+    recording?: VoiceRecording,
+  ) {
     if (!session || sending) return
     setInputError('')
     setSending(true)
     const optimisticId = `local-${Date.now()}`
-    setMessages((prev) => [...prev, { id: optimisticId, role: 'user', text }])
+    setMessages((prev) => [...prev, { id: optimisticId, role: 'user', text, inputType }])
     setDraft('')
     try {
       const result = inputType === 'voice'
-        ? await processVoiceTurn(session.roomId, text)
+        ? recording
+          ? await processVoiceTurn(session.roomId, text, recording)
+          : (() => { throw new Error('분석할 녹음 데이터가 없습니다.') })()
         : await processTextTurn(session.roomId, text)
       setMessages((prev) => [
         ...prev.filter((message) => message.id !== optimisticId),
@@ -133,34 +154,93 @@ export function SimulationScreen() {
     await runTurn(text, 'text')
   }
 
-  function startVoiceInput() {
+  async function startVoiceInput() {
     if (sending || listening) return
     const Recognition = window.SpeechRecognition ?? window.webkitSpeechRecognition
-    if (!Recognition) {
-      setInputError('이 브라우저는 음성 인식을 지원하지 않습니다. Chrome 또는 Safari를 사용해 주세요.')
+    if (!Recognition || !window.MediaRecorder || !navigator.mediaDevices?.getUserMedia) {
+      setInputError('이 브라우저는 음성 녹음과 인식을 지원하지 않습니다. Chrome 또는 Safari를 사용해 주세요.')
       return
     }
     setInputError('')
+    setListening(true)
+    voiceTranscriptRef.current = ''
+    recordedChunksRef.current = []
+    let stream: MediaStream
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+    } catch {
+      setListening(false)
+      setInputError('마이크 권한을 허용해 주세요.')
+      return
+    }
+    mediaStreamRef.current = stream
+    const preferredMime = ['audio/webm;codecs=opus', 'audio/mp4', 'audio/ogg;codecs=opus']
+      .find((mime) => MediaRecorder.isTypeSupported(mime))
+    const recorder = preferredMime
+      ? new MediaRecorder(stream, { mimeType: preferredMime })
+      : new MediaRecorder(stream)
+    mediaRecorderRef.current = recorder
+    recorder.ondataavailable = (event) => {
+      if (event.data.size > 0) recordedChunksRef.current.push(event.data)
+    }
+    recorder.onerror = () => setInputError('음성을 녹음하지 못했습니다.')
+    recorder.onstop = () => {
+      const durationSeconds = Math.max(
+        0.1,
+        (performance.now() - recordingStartedAtRef.current) / 1000,
+      )
+      const mimeType = recorder.mimeType.split(';', 1)[0] || 'audio/webm'
+      const blob = new Blob(recordedChunksRef.current, { type: mimeType })
+      stream.getTracks().forEach((track) => track.stop())
+      mediaStreamRef.current = null
+      mediaRecorderRef.current = null
+      setListening(false)
+      const transcript = voiceTranscriptRef.current.trim()
+      if (!transcript || !blob.size) {
+        if (!transcript) setInputError('인식된 음성이 없습니다. 다시 말씀해 주세요.')
+        return
+      }
+      void blobToBase64(blob)
+        .then((audioBase64) => runTurn(transcript, 'voice', {
+          audioBase64,
+          mimeType,
+          durationSeconds: Number(durationSeconds.toFixed(2)),
+        }))
+        .catch((reason: unknown) => {
+          setInputError(reason instanceof Error ? reason.message : '녹음 파일을 처리하지 못했습니다.')
+        })
+    }
     const recognition = new Recognition()
     recognition.lang = 'ko-KR'
     recognition.interimResults = true
     recognition.continuous = false
-    recognition.onstart = () => setListening(true)
     recognition.onresult = (event) => {
       let transcript = ''
-      for (let i = event.resultIndex; i < event.results.length; i += 1) {
+      for (let i = 0; i < event.results.length; i += 1) {
         transcript += event.results[i][0]?.transcript ?? ''
       }
-      setDraft(transcript.trim())
+      const cleanTranscript = transcript.trim()
+      voiceTranscriptRef.current = cleanTranscript
+      setDraft(cleanTranscript)
       const last = event.results[event.results.length - 1]
-      if (last?.isFinal && transcript.trim()) void runTurn(transcript.trim(), 'voice')
+      if (last?.isFinal && cleanTranscript) recognition.stop()
     }
     recognition.onerror = (event) => {
       if (event.error !== 'aborted') setInputError(`음성 인식 오류: ${event.error}`)
     }
-    recognition.onend = () => setListening(false)
+    recognition.onend = () => {
+      if (recorder.state === 'recording') recorder.stop()
+      else setListening(false)
+    }
     recognitionRef.current = recognition
-    recognition.start()
+    recordingStartedAtRef.current = performance.now()
+    recorder.start()
+    try {
+      recognition.start()
+    } catch {
+      recorder.stop()
+      setInputError('음성 인식을 시작하지 못했습니다.')
+    }
   }
 
   function openFeedback(value: AnswerFeedback) {
@@ -376,7 +456,7 @@ export function SimulationScreen() {
             type="button"
             aria-label="음성으로 답하기"
             aria-pressed={listening}
-            onClick={() => listening ? recognitionRef.current?.stop() : startVoiceInput()}
+            onClick={() => listening ? recognitionRef.current?.stop() : void startVoiceInput()}
             disabled={sending}
             whileTap={{ scale: PRESS.icon }}
             transition={T.instant}

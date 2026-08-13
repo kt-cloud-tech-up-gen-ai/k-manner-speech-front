@@ -1,6 +1,5 @@
 import { AnimatePresence, motion } from 'motion/react'
 import type { AnswerFeedback } from '@/api/types'
-import { Chip } from '@/components/ui/Chip'
 import { cn } from '@/lib/cn'
 import { EASE_OUT, T, scrimVariants } from '@/lib/motion'
 
@@ -44,7 +43,7 @@ export function AnswerFeedbackSheet({
             role="dialog"
             aria-modal="true"
             aria-label="답변 피드백"
-            className="scrollbar-none relative max-h-[498px] overflow-y-auto rounded-t-[28px] bg-bg shadow-sheet"
+            className="scrollbar-none relative max-h-[680px] overflow-y-auto rounded-t-[28px] bg-bg shadow-sheet"
             initial={{ y: '100%' }}
             animate={{ y: 0 }}
             exit={{ y: '100%' }}
@@ -75,37 +74,14 @@ export function AnswerFeedbackSheet({
             </div>
 
             <ScorePanel feedback={feedback} />
-            <Timeline feedback={feedback} />
+            {feedback.inputType === 'voice' && feedback.voiceEmotion && (
+              <>
+                <EmotionPanel feedback={feedback} />
+                <ImpressionPanel feedback={feedback} />
+              </>
+            )}
 
-            <h3 className="font-splash px-5 pt-4 text-[11.5px] leading-[15px] font-bold text-heading-warm">
-              구간별 피드백
-            </h3>
-
-            <div className="flex flex-col gap-2 px-5 pt-2">
-              {feedback.issues.map((issue, i) => (
-                <motion.div
-                  key={issue.timestamp}
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.28, ease: EASE_OUT, delay: 0.12 + i * 0.06 }}
-                  className="rounded-[14px] border border-issue-border bg-issue-bg px-3 py-2.5"
-                >
-                  <div className="flex items-center gap-2">
-                    <Chip tone="issue" shape="md" className="font-splash px-2">
-                      {issue.timestamp}
-                    </Chip>
-                    <span className="font-splash text-xs font-bold text-heading-warm">
-                      {issue.word}
-                    </span>
-                  </div>
-                  <p className="font-splash mt-1.5 text-2xs leading-[15px] text-body-warm">
-                    {issue.guidance}
-                  </p>
-                </motion.div>
-              ))}
-            </div>
-
-            <div className="mx-5 mt-4 mb-5 rounded-[14px] bg-surface-sunken px-3 py-2.5">
+            <div className="mx-5 mt-3.5 mb-5 rounded-[14px] bg-surface-sunken px-3 py-2.5">
               <p className="font-splash text-2xs font-bold text-ink-2">표현 피드백</p>
               <p className="font-splash mt-1.5 text-2xs leading-[15px] text-body-warm">
                 {feedback.expression}
@@ -137,9 +113,9 @@ function ScorePanel({ feedback }: { feedback: AnswerFeedback }) {
           <span className="font-mono text-xs font-medium text-score-meta">
             / {feedback.scoreOutOf}
           </span>
-          <Chip tone="score" shape="md" className="font-splash ml-2 px-2.5">
+          <span className="font-splash ml-2 rounded-full bg-primary/10 px-2.5 py-1 text-2xs font-bold text-primary-strong">
             {feedback.scoreLabel}
-          </Chip>
+          </span>
         </p>
       </div>
 
@@ -166,60 +142,57 @@ function ScorePanel({ feedback }: { feedback: AnswerFeedback }) {
   )
 }
 
-function Timeline({ feedback }: { feedback: AnswerFeedback }) {
-  const { waveform, errorRanges, durationSeconds } = feedback
-  const inError = (i: number) => {
-    const t = (i / waveform.length) * durationSeconds
-    return errorRanges.some((r) => t >= r.from && t <= r.to)
-  }
-
+function EmotionPanel({ feedback }: { feedback: AnswerFeedback }) {
+  const emotions = feedback.voiceEmotion?.emotions ?? []
+  const colors = ['bg-primary', 'bg-[#5AAF91]', 'bg-[#D1AC63]']
   return (
-    <div className="mx-5 mt-2.5 rounded-2xl border border-timeline-border bg-surface-input px-3.5 py-3">
-      <div className="flex items-baseline justify-between">
-        <span className="font-splash text-[11.5px] leading-[15px] font-bold text-heading-warm">
-          오류 구간
-        </span>
-        <span className="font-mono text-2xs font-medium text-lang-help">
-          녹음 {durationSeconds}초
-        </span>
-      </div>
-
-      <div className="relative mt-2.5 flex h-[38px] items-center gap-[3px]">
-        {/* Flagged spans sit behind the bars. */}
-        {errorRanges.map((range) => (
-          <span
-            key={`${range.from}-${range.to}`}
-            aria-hidden="true"
-            className="absolute top-0 h-full rounded-sm bg-error-range/72"
-            style={{
-              left: `${(range.from / durationSeconds) * 100}%`,
-              width: `${((range.to - range.from) / durationSeconds) * 100}%`,
-            }}
-          />
-        ))}
-
-        {waveform.map((height, i) => (
-          <motion.span
-            key={i}
-            className={cn(
-              'relative block w-[6px] flex-1 rounded-xs',
-              inError(i) ? 'bg-danger' : 'bg-primary-lighter',
-            )}
-            style={{ height: `${height * 100}%` }}
-            initial={{ scaleY: 0 }}
-            animate={{ scaleY: 1 }}
-            transition={{ duration: 0.28, ease: EASE_OUT, delay: 0.1 + i * 0.012 }}
-          />
+    <section className="mx-5 mt-2.5 rounded-2xl border border-timeline-border bg-surface-input px-3.5 py-3">
+      <h3 className="font-splash text-[11.5px] leading-[15px] font-bold text-heading-warm">
+        감정 분석
+      </h3>
+      <div className="mt-2.5 flex flex-col gap-2.5">
+        {emotions.map((emotion, index) => (
+          <div key={emotion.label} className="grid grid-cols-[52px_1fr_38px] items-center gap-2">
+            <span className="font-splash text-2xs font-medium text-ink-2">{emotion.label}</span>
+            <span className="h-2 overflow-hidden rounded-full bg-[#E7E3DA]">
+              <motion.span
+                className={cn('block h-full rounded-full', colors[index] ?? 'bg-primary')}
+                initial={{ width: 0 }}
+                animate={{ width: `${emotion.percentage}%` }}
+                transition={{ duration: 0.42, ease: EASE_OUT, delay: 0.08 + index * 0.06 }}
+              />
+            </span>
+            <span className="font-mono text-right text-2xs font-medium text-lang-help">
+              {emotion.percentage}%
+            </span>
+          </div>
         ))}
       </div>
-
-      <div className="mt-1.5 flex justify-between font-mono text-[9px] leading-3 font-medium text-lang-help">
-        <span>0:00</span>
-        <span>0:0{Math.ceil(durationSeconds)}</span>
-      </div>
-      <p className="font-splash mt-2 text-[9.7px] leading-[13px] text-lang-help">
-        빨간 구간을 눌러 문제 발음을 다시 들어보세요
+      <p className="font-splash mt-2.5 text-[9.7px] leading-[13px] text-lang-help">
+        음성 톤 · 속도 · 강세를 바탕으로 분석했어요
       </p>
-    </div>
+    </section>
+  )
+}
+
+function ImpressionPanel({ feedback }: { feedback: AnswerFeedback }) {
+  const impressions = feedback.voiceEmotion?.impressions ?? []
+  const tones = ['bg-primary/10 text-primary-deeper', 'bg-[#DFF2EA] text-[#28735E]', 'bg-surface-sunken text-[#75633C]']
+  return (
+    <section className="mx-5 mt-2.5 rounded-2xl border border-timeline-border bg-surface-input px-3.5 py-3">
+      <h3 className="font-splash text-[11.5px] leading-[15px] font-bold text-heading-warm">
+        상대가 느끼는 인상
+      </h3>
+      <div className="mt-2.5 flex flex-wrap gap-2">
+        {impressions.map((impression, index) => (
+          <span
+            key={impression}
+            className={cn('rounded-full px-3 py-1.5 text-2xs font-bold', tones[index] ?? tones[0])}
+          >
+            {impression}
+          </span>
+        ))}
+      </div>
+    </section>
   )
 }
