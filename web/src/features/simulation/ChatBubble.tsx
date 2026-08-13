@@ -65,7 +65,7 @@ export function ChatBubble({
       >
         {mine && (
           <span className="mb-1 inline-block rounded-sm bg-white/20 px-[7px] py-0.5 text-[8.9px] leading-[11px] font-bold text-white">
-            텍스트 입력
+            {message.inputType === 'voice' ? '마이크 입력' : '텍스트 입력'}
           </span>
         )}
 

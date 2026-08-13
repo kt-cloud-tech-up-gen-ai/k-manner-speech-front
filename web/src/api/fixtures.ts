@@ -180,37 +180,22 @@ export const SIMULATION_CONTINUED: ChatMessage[] = [
   },
 ]
 
-/** Waveform heights from the 30 bars the design draws (normalised 0-1). */
-const WAVEFORM = [
-  0.25, 0.44, 0.63, 0.38, 0.81, 0.56, 0.31, 0.69, 0.94, 0.5, 0.75, 0.38, 0.25, 0.63,
-  0.88, 0.56, 0.31, 0.75, 1, 0.5, 0.81, 0.38, 0.56, 0.94, 0.63, 0.31, 0.69, 0.5, 0.88,
-  0.38,
-]
-
 export const ANSWER_FEEDBACK: AnswerFeedback = {
+  inputType: 'voice',
   meta: '마이크 입력 · 4.7초 · 분석 완료',
   durationSeconds: 4.7,
   score: 8.8,
   scoreOutOf: 10,
   scoreLabel: '또렷해요',
   secondaryMetrics: '표현 9.2  ·  상황 9.0',
-  waveform: WAVEFORM,
-  errorRanges: [
-    { from: 1.2, to: 1.8 },
-    { from: 3.3, to: 4.3 },
-  ],
-  issues: [
-    {
-      timestamp: '00:01.2–00:01.8',
-      word: '‘건물로’',
-      guidance: '‘물로’의 ㄹ 연결이 빨라 뭉쳐 들려요.',
-    },
-    {
-      timestamp: '00:03.3–00:04.3',
-      word: '‘감사합니다’',
-      guidance: '끝 음절이 빨라요. 호흡을 두고 마무리해요.',
-    },
-  ],
+  voiceEmotion: {
+    emotions: [
+      { label: '차분함', percentage: 72 },
+      { label: '친절함', percentage: 18 },
+      { label: '긴장감', percentage: 10 },
+    ],
+    impressions: ['차분하게 들려요', '공손한 말투예요', '조금 긴장한 느낌이 있어요'],
+  },
   expression: '첫 마디에 ‘혹시’를 넣으면 더 부드러워요.',
 }
 

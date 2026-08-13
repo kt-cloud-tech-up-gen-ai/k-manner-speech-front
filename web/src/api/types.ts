@@ -84,6 +84,7 @@ export interface ChatMessage {
   audioUrl?: string
   /** Feedback returned with this turn, so opening it needs no extra request. */
   feedback?: AnswerFeedback
+  inputType?: 'text' | 'voice'
   /** Romanised / translated helper line shown under persona lines. */
   hint?: string
 }
@@ -105,6 +106,7 @@ export interface SimulationSession {
 
 /** The P09 "답변 피드백" sheet: a pronunciation report over one recording. */
 export interface AnswerFeedback {
+  inputType: 'text' | 'voice'
   /** "마이크 입력 · 4.7초 · 분석 완료" */
   meta: string
   durationSeconds: number
@@ -112,11 +114,10 @@ export interface AnswerFeedback {
   scoreOutOf: number
   scoreLabel: string
   secondaryMetrics: string
-  /** Bar heights 0-1, in recording order. */
-  waveform: number[]
-  /** Flagged spans, in seconds. */
-  errorRanges: Array<{ from: number; to: number }>
-  issues: Array<{ timestamp: string; word: string; guidance: string }>
+  voiceEmotion?: {
+    emotions: Array<{ label: string; percentage: number }>
+    impressions: string[]
+  }
   expression: string
 }
 

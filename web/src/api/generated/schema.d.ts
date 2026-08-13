@@ -329,6 +329,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/voice/emotion-analysis": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Analyze Voice Emotion
+         * @description 녹음 음성의 감정 비율과 상대가 받을 인상을 분석한다.
+         */
+        post: operations["analyze_voice_emotion_voice_emotion_analysis_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/rooms/{room_id}/turns/text": {
         parameters: {
             query?: never;
@@ -573,6 +593,7 @@ export interface components {
             /** Persona */
             persona: string;
             analysis: components["schemas"]["UserInputAnalysis"];
+            voice_emotion?: components["schemas"]["VoiceEmotionAnalysis"] | null;
             /** Answer */
             answer: string;
             /** Response Style */
@@ -600,6 +621,13 @@ export interface components {
          * @enum {string}
          */
         Emotion: "화남" | "기쁨" | "당황스러움" | "궁금" | "슬픔" | "보통";
+        /** EmotionScore */
+        EmotionScore: {
+            /** Label */
+            label: string;
+            /** Percentage */
+            percentage: number;
+        };
         /**
          * EmotionTtsResponse
          * @description 생성 파일 위치와 재현에 필요한 실제 provider 설정을 담는 응답.
@@ -1079,10 +1107,38 @@ export interface components {
             /** Context */
             ctx?: Record<string, never>;
         };
+        /** VoiceEmotionAnalysis */
+        VoiceEmotionAnalysis: {
+            /** Emotions */
+            emotions: components["schemas"]["EmotionScore"][];
+            /** Impressions */
+            impressions: string[];
+            /** Transcript */
+            transcript: string;
+            /** Model */
+            model: string;
+        };
+        /** VoiceEmotionAnalysisRequest */
+        VoiceEmotionAnalysisRequest: {
+            /** Transcript */
+            transcript: string;
+            /** Audio Base64 */
+            audio_base64: string;
+            /** Audio Mime Type */
+            audio_mime_type: string;
+            /** Duration Seconds */
+            duration_seconds?: number | null;
+        };
         /** VoiceRoomTurnRequest */
         VoiceRoomTurnRequest: {
             /** Transcript */
             transcript: string;
+            /** Audio Base64 */
+            audio_base64: string;
+            /** Audio Mime Type */
+            audio_mime_type: string;
+            /** Duration Seconds */
+            duration_seconds?: number | null;
         };
     };
     responses: never;
@@ -1586,6 +1642,39 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    analyze_voice_emotion_voice_emotion_analysis_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VoiceEmotionAnalysisRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VoiceEmotionAnalysis"];
+                };
             };
             /** @description Validation Error */
             422: {

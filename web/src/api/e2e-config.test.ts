@@ -4,12 +4,17 @@ import { createE2eConfig } from '../../e2eConfig'
 
 describe('E2E configuration', () => {
   it('keeps local development defaults in one source', () => {
-    const config = createE2eConfig({}, 'C:/workspace/front/web')
+    const config = createE2eConfig(
+      {},
+      'C:/workspace/Basic_project_front/k-manner-speech-front/web',
+    )
 
     expect(config.apiUrl, 'AC-E2E-ORIGINS-SINGLE-SOURCE').toBe('http://localhost:8000')
     expect(config.webUrl).toBe('http://localhost:5173')
     expect(config.apiHealthUrl).toBe('http://localhost:8000/health')
-    expect(config.apiRoot.replaceAll('\\', '/')).toBe('C:/workspace/k-manner-speech-api')
+    expect(config.apiRoot.replaceAll('\\', '/')).toBe(
+      'C:/workspace/Basic_project_api/k-manner-speech-api',
+    )
   })
 
   it('applies URL and API root overrides consistently', () => {
@@ -19,7 +24,7 @@ describe('E2E configuration', () => {
         E2E_WEB_URL: 'http://127.0.0.1:9200/',
         E2E_API_ROOT: 'D:/repos/api',
       },
-      'C:/workspace/front/web',
+      'C:/workspace/Basic_project_front/k-manner-speech-front/web',
     )
 
     expect(config.apiUrl, 'AC-E2E-ORIGINS-SINGLE-SOURCE').toBe('http://127.0.0.1:9100')
