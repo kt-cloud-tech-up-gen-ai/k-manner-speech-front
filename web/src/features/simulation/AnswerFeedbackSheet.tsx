@@ -73,7 +73,7 @@ export function AnswerFeedbackSheet({
               </button>
             </div>
 
-            <ScorePanel feedback={feedback} />
+            {feedback.inputType === 'voice' && <ScorePanel feedback={feedback} />}
             {feedback.inputType === 'voice' && feedback.voiceEmotion && (
               <>
                 <EmotionPanel feedback={feedback} />

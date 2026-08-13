@@ -21,6 +21,20 @@ type ApiRoom = components['schemas']['RoomResponse']
 type ApiMessage = components['schemas']['ChatMessageResponse']
 type RoomTurnResponse = components['schemas']['RoomTurnResponse']
 
+export const FREE_CHAT_SCENARIO_ID = 'free_chat'
+
+const freeChatScenario = (personaId: string): Scenario => ({
+  id: FREE_CHAT_SCENARIO_ID,
+  personaId,
+  title: { ko: '자유 대화', en: 'Free Chat' },
+  goal: '정해진 상황 없이 페르소나와 자유롭게 대화하기',
+  difficulty: 'easy',
+  estimatedMinutes: 3,
+  recommended: true,
+  inProgress: false,
+  requiresLogin: false,
+})
+
 export type ConversationTurn = {
   messages: ChatMessage[]
   audioUrl: string
@@ -109,7 +123,9 @@ export async function getPersona(id: string): Promise<Persona | undefined> {
 
 export async function getScenarios(personaId: string): Promise<Scenario[]> {
   const persona = await apiRequest<ApiPersona>(`/personas/${personaId}`)
-  return ('scenarios' in persona ? persona.scenarios : []).map((scenario) => scenarioFromApi(scenario, personaId))
+  const databaseScenarios = ('scenarios' in persona ? persona.scenarios : [])
+    .map((scenario) => scenarioFromApi(scenario, personaId))
+  return [freeChatScenario(personaId), ...databaseScenarios]
 }
 
 export async function getRooms(): Promise<ApiRoom[]> {
@@ -120,7 +136,37 @@ export async function getRooms(): Promise<ApiRoom[]> {
 export async function getSimulation(
   scenarioId: string,
   mode: 'new' | 'continue',
+  personaId?: string,
 ): Promise<SimulationSession | undefined> {
+  if (scenarioId === FREE_CHAT_SCENARIO_ID) {
+    if (!personaId) throw new Error('자유 대화 상대를 찾을 수 없습니다.')
+    const personaApi = await apiRequest<ApiPersona>(`/personas/${personaId}`)
+    const rooms = await apiRequest<{ rooms: ApiRoom[] }>('/rooms')
+    const existing = rooms.rooms.find((candidate) => (
+      candidate.persona_id === personaId
+      && candidate.scenario_id === null
+      && candidate.status === 'in_progress'
+    ))
+    const room = existing ?? await apiRequest<ApiRoom>('/rooms', {
+      method: 'POST',
+      body: {
+        persona_id: personaId,
+        scenario_id: null,
+        name: `${personaApi.first_name} 자유 대화`,
+      },
+    })
+    const history = await apiRequest<{ messages: ApiMessage[] }>(`/rooms/${room.id}/messages`)
+    return {
+      roomId: room.id,
+      scenarioId: FREE_CHAT_SCENARIO_ID,
+      persona: personaFromApi(personaApi),
+      goalLabel: '목표 · 자유롭게 대화하기',
+      elapsed: '00:00', expression: '표정 · 미소', step: room.turn_count,
+      totalSteps: room.guest ? 3 : 5,
+      completed: room.status === 'completed',
+      messages: history.messages.map(messageFromApi),
+    }
+  }
   const scenario = await apiRequest<components['schemas']['ScenarioResponse']>(`/scenarios/${scenarioId}`)
   const personaApi = scenario.personas[0]
   if (!personaApi) return undefined
@@ -145,17 +191,46 @@ export async function getSimulation(
   }
 }
 
-const messageFromApi = (message: ApiMessage): ChatMessage => ({
-  id: message.id,
-  role: message.role === 'assistant' ? 'persona' : message.role as ChatMessage['role'],
-  text: message.content,
-  audioUrl: (() => {
+const messageFromApi = (message: ApiMessage): ChatMessage => {
+  const persisted = (message as ApiMessage & {
+    feedback?: {
+      input_type: 'text' | 'voice'
+      duration_seconds: number
+      score: number
+      summary: string
+      improvements: string[]
+      voice_emotion?: AnswerFeedback['voiceEmotion'] | null
+    } | null
+  }).feedback
+  const feedback: AnswerFeedback | undefined = persisted ? {
+    inputType: persisted.input_type,
+    meta: persisted.input_type === 'voice'
+      ? `마이크 입력 · ${persisted.duration_seconds.toFixed(1)}초 · 분석 완료`
+      : '텍스트 입력 · 분석 완료',
+    durationSeconds: persisted.duration_seconds,
+    score: persisted.score / 10,
+    scoreOutOf: 10,
+    scoreLabel: persisted.score >= 80 ? '자연스러워요' : persisted.score >= 60 ? '좋아요' : '연습해 볼까요',
+    secondaryMetrics: '',
+    voiceEmotion: persisted.input_type === 'voice' && persisted.voice_emotion
+      ? persisted.voice_emotion
+      : undefined,
+    expression: [persisted.summary, ...persisted.improvements].filter(Boolean).join(' · '),
+  } : undefined
+  return {
+    id: message.id,
+    role: message.role === 'assistant' ? 'persona' : message.role as ChatMessage['role'],
+    text: message.content,
+    inputType: feedback?.inputType,
+    feedback,
+    audioUrl: (() => {
     const path = (message as ApiMessage & { audio_url?: string | null }).audio_url
     if (!path) return undefined
     const apiUrl = import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
     return `${apiUrl}${path}`
-  })(),
-})
+    })(),
+  }
+}
 
 export async function sendMessage(roomId: string, text: string): Promise<ChatMessage[]> {
   const result = await apiRequest<{ message: ApiMessage }>(`/rooms/${roomId}/messages`, {

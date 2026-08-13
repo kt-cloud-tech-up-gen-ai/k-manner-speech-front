@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { AnimatePresence, motion } from 'motion/react'
-import { getPersona, getRooms, getScenarios } from '@/api/client'
+import { FREE_CHAT_SCENARIO_ID, getPersona, getRooms, getScenarios } from '@/api/client'
 import type { Persona, Scenario } from '@/api/types'
 import { ScreenBody } from '@/components/shell/Screen'
 import { BackButton } from '@/components/shell/TopBar'
@@ -42,7 +42,9 @@ export function ScenariosScreen() {
         setScenarios(
           loadedScenarios.map((scenario) => ({
             ...scenario,
-            inProgress: activeScenarioIds.has(scenario.id),
+            inProgress: scenario.id === FREE_CHAT_SCENARIO_ID
+              ? activeScenarioIds.has(null)
+              : activeScenarioIds.has(scenario.id),
           })),
         )
       },
@@ -62,10 +64,18 @@ export function ScenariosScreen() {
       navigate('/login')
       return
     }
-    navigate(`/simulation/${scenario.id}${mode === 'continue' ? '?mode=continue' : ''}`)
+    const search = new URLSearchParams()
+    if (mode === 'continue') search.set('mode', 'continue')
+    if (scenario.id === FREE_CHAT_SCENARIO_ID) search.set('persona', personaId)
+    const queryString = search.toString()
+    navigate(`/simulation/${scenario.id}${queryString ? `?${queryString}` : ''}`)
   }
 
   function pick(scenario: Scenario) {
+    if (scenario.id === FREE_CHAT_SCENARIO_ID && scenario.inProgress) {
+      start(scenario, 'continue')
+      return
+    }
     if (scenario.inProgress) {
       setResumeTarget(scenario)
       return

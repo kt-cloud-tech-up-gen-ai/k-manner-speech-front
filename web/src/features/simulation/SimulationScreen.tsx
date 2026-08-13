@@ -39,6 +39,7 @@ export function SimulationScreen() {
   const { scenarioId = '' } = useParams()
   const [params] = useSearchParams()
   const mode = params.get('mode') === 'continue' ? 'continue' : 'new'
+  const personaId = params.get('persona') ?? undefined
 
   const [session, setSession] = useState<SimulationSession | null>(null)
   const [messages, setMessages] = useState<ChatMessage[]>([])
@@ -72,12 +73,12 @@ export function SimulationScreen() {
   }, [])
 
   useEffect(() => {
-    const practiceKey = `${scenarioId}:${mode}:${retryCount}`
+    const practiceKey = `${scenarioId}:${personaId ?? ''}:${mode}:${retryCount}`
     if (initializedPractice.current === practiceKey) return
     initializedPractice.current = practiceKey
     setLoading(true)
     setLoadError('')
-    void getSimulation(scenarioId, mode)
+    void getSimulation(scenarioId, mode, personaId)
       .then((s) => {
         if (!s) throw new Error('연습 정보를 불러올 수 없습니다.')
         setSession(s)
@@ -93,7 +94,7 @@ export function SimulationScreen() {
         )
       })
       .finally(() => setLoading(false))
-  }, [scenarioId, mode, portraitHeight, retryCount])
+  }, [scenarioId, personaId, mode, portraitHeight, retryCount])
 
   useEffect(() => {
     const el = scrollRef.current

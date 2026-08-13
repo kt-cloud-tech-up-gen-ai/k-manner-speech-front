@@ -49,6 +49,8 @@ describe('AnswerFeedbackSheet', () => {
 
     expect(screen.queryByRole('heading', { name: '감정 분석' })).not.toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: '상대가 느끼는 인상' })).not.toBeInTheDocument()
+    expect(screen.queryByText('발음 점수')).not.toBeInTheDocument()
+    expect(screen.queryByText('8.8')).not.toBeInTheDocument()
     expect(screen.getByText(baseFeedback.expression)).toBeInTheDocument()
   })
 })
