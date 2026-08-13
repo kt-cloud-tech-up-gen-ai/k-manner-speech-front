@@ -38,6 +38,8 @@ export interface paths {
          *     응답은 로그인(POST /auth/login)과 같은 형태다. 받은 access_token을 이후 요청의
          *     `Authorization: Bearer <token>` 헤더에 붙이면 바로 다른 API를 쓸 수 있다.
          *     프로필(온보딩)은 가입 후 `PUT /auth/me/profile`로 저장한다.
+         *
+         *     TODO: 이메일 인증. 현재 email 인증 안 함. 심화 프로젝트에서 진행.
          */
         post: operations["signup_auth_signup_post"];
         delete?: never;
@@ -327,6 +329,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/rooms/{room_id}/turns/text": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Process Text Turn */
+        post: operations["process_text_turn_rooms__room_id__turns_text_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/rooms/{room_id}/turns/voice": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Process Voice Turn */
+        post: operations["process_voice_turn_rooms__room_id__turns_voice_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/rooms/{room_id}/audio/{filename}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Generated Audio */
+        get: operations["get_generated_audio_rooms__room_id__audio__filename__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/rooms/{room_id}/messages": {
         parameters: {
             query?: never;
@@ -334,20 +387,31 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * List Messages
-         * @description 채팅방의 채팅 내역을 오래된 순으로 반환한다. (KAN-62)
-         */
+        /** List Messages */
         get: operations["list_messages_rooms__room_id__messages_get"];
         put?: never;
         /**
          * Send Message
-         * @description 사용자 메시지를 저장하고 persona 응답을 생성해 함께 저장한다. (KAN-65)
-         *
-         *     TODO(KAN-59/KAN-65): room.scenario_id를 저장만 하고 프롬프트에는 반영하지 않는다.
-         *       build_chat_prompt가 modes 번들을 받도록 확장해 시나리오(면접/역할극)를 적용할 것.
+         * @description 기존 텍스트 메시지 API 호환 경로. 새 앱은 turns/text를 사용한다.
          */
         post: operations["send_message_rooms__room_id__messages_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/rooms/{room_id}/messages/{message_id}/audio": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Message Audio */
+        get: operations["get_message_audio_rooms__room_id__messages__message_id__audio_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -365,29 +429,9 @@ export interface paths {
         put?: never;
         /**
          * Request Feedback
-         * @description 채팅방 대화에서 사용자 말투의 예절/매너를 평가한다. (KAN-63)
+         * @description 기존 수동 피드백 API. 새 turns API는 피드백을 자동 반환한다.
          */
         post: operations["request_feedback_rooms__room_id__feedback_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/tts": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Text To Speech
-         * @description 텍스트를 ElevenLabs 음성으로 합성해 base64로 반환한다. (KAN-64)
-         */
-        post: operations["text_to_speech_tts_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -470,6 +514,14 @@ export interface components {
             /** Naturalness */
             naturalness: number;
         };
+        /** ChatInputAnalysis */
+        ChatInputAnalysis: {
+            emotion: components["schemas"]["Emotion"];
+            /** Inferred Style */
+            inferred_style: string;
+            /** Intent */
+            intent: string;
+        };
         /** ChatMessageListResponse */
         ChatMessageListResponse: {
             /** Messages */
@@ -488,6 +540,8 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+            /** Audio Url */
+            audio_url?: string | null;
         };
         /** ChatRequest */
         ChatRequest: {
@@ -495,11 +549,37 @@ export interface components {
             persona: string;
             /** Question */
             question: string;
+            analysis?: components["schemas"]["TextModelAnalysis"] | null;
         };
         /** ChatResponse */
         ChatResponse: {
             /** Answer */
             answer: string;
+            /** Response Style */
+            response_style?: string | null;
+        };
+        /**
+         * ConversationResponse
+         * @description 분석·페르소나 답변·TTS를 모두 포함하는 통합 응답.
+         */
+        ConversationResponse: {
+            /**
+             * Input Type
+             * @enum {string}
+             */
+            input_type: "voice" | "text";
+            /** Source Text */
+            source_text: string;
+            /** Persona */
+            persona: string;
+            analysis: components["schemas"]["UserInputAnalysis"];
+            /** Answer */
+            answer: string;
+            /** Response Style */
+            response_style: string;
+            audio: components["schemas"]["EmotionTtsResponse"];
+            /** Processing Time Ms */
+            processing_time_ms: number;
         };
         /**
          * CreateRoomRequest
@@ -514,6 +594,31 @@ export interface components {
             scenario_id?: string | null;
             /** Name */
             name: string;
+        };
+        /**
+         * Emotion
+         * @enum {string}
+         */
+        Emotion: "화남" | "기쁨" | "당황스러움" | "궁금" | "슬픔" | "보통";
+        /**
+         * EmotionTtsResponse
+         * @description 생성 파일 위치와 재현에 필요한 실제 provider 설정을 담는 응답.
+         */
+        EmotionTtsResponse: {
+            /** Text */
+            text: string;
+            /** Speaking Style */
+            speaking_style: string;
+            /** Audio Path */
+            audio_path: string;
+            /** Metadata Path */
+            metadata_path: string;
+            /** Tts Provider */
+            tts_provider: string;
+            /** Tts Model */
+            tts_model: string;
+            /** Voice Name */
+            voice_name: string;
         };
         /** FeedbackIssue */
         FeedbackIssue: {
@@ -546,6 +651,20 @@ export interface components {
             issues: components["schemas"]["FeedbackIssue"][];
             /** Cached */
             cached: boolean;
+        };
+        /** FeedbackResult */
+        FeedbackResult: {
+            /** Score */
+            score: number;
+            category_scores: components["schemas"]["CategoryScores"];
+            /** Summary */
+            summary: string;
+            /** Strengths */
+            strengths: string[];
+            /** Improvements */
+            improvements: string[];
+            /** Issues */
+            issues: components["schemas"]["FeedbackIssue"][];
         };
         /**
          * Gender
@@ -646,15 +765,15 @@ export interface components {
              */
             description: string;
             /**
+             * Avatar Url
+             * @description 공개 페르소나 이미지 URL
+             */
+            avatar_url?: string | null;
+            /**
              * Relationship Description
              * @description 사용자와의 관계. 호칭과 존대 수준을 정한다
              */
             relationship_description: string;
-            /**
-             * Voice Id
-             * @description ElevenLabs 음성 id. 없으면 ELEVENLABS_VOICE_ID 기본 음성을 쓴다
-             */
-            voice_id?: string | null;
             /**
              * Version
              * Format: date-time
@@ -704,6 +823,11 @@ export interface components {
              * @description 목록 화면에 보여 주는 한 줄 소개
              */
             description: string;
+            /**
+             * Avatar Url
+             * @description 공개 페르소나 이미지 URL
+             */
+            avatar_url?: string | null;
         };
         /**
          * ProfileResponse
@@ -780,6 +904,15 @@ export interface components {
             status: string;
             /** Turn Count */
             turn_count: number;
+        };
+        /** RoomTurnResponse */
+        RoomTurnResponse: {
+            conversation: components["schemas"]["ConversationResponse"];
+            feedback: components["schemas"]["FeedbackResult"];
+            /** Room Id */
+            room_id: string;
+            user_message: components["schemas"]["ChatMessageResponse"];
+            assistant_message: components["schemas"]["ChatMessageResponse"];
         };
         /** ScenarioListResponse */
         ScenarioListResponse: {
@@ -868,11 +1001,14 @@ export interface components {
         SendMessageRequest: {
             /** Question */
             question: string;
+            analysis?: components["schemas"]["ChatInputAnalysis"] | null;
         };
         /** SendMessageResponse */
         SendMessageResponse: {
             /** Answer */
             answer: string;
+            /** Response Style */
+            response_style?: string | null;
             message: components["schemas"]["ChatMessageResponse"];
         };
         /**
@@ -897,21 +1033,38 @@ export interface components {
          * @enum {string}
          */
         StudyFrequency: "daily" | "five_per_week" | "three_per_week" | "twice_per_week" | "weekly";
-        /** TtsRequest */
-        TtsRequest: {
+        /** TextModelAnalysis */
+        TextModelAnalysis: {
+            emotion: components["schemas"]["Emotion"];
+            /** Inferred Style */
+            inferred_style: string;
+            /** Intent */
+            intent: string;
+        };
+        /** TextRoomTurnRequest */
+        TextRoomTurnRequest: {
             /** Text */
             text: string;
-            /** Persona Id */
-            persona_id?: string | null;
         };
-        /** TtsResponse */
-        TtsResponse: {
-            /** Audio */
-            audio: string;
-            /** Mimetype */
-            mimeType: string;
-            /** Voice Id */
-            voice_id: string;
+        /** UserInputAnalysis */
+        UserInputAnalysis: {
+            /** User Text */
+            user_text: string;
+            user_emotion: components["schemas"]["Emotion"];
+            /**
+             * User Speaking Style
+             * @description 음향 분석으로 관찰한 말투. 현재 텍스트 기반 분석에서는 null
+             */
+            user_speaking_style: string | null;
+            /**
+             * Inferred Style
+             * @description 텍스트 표현과 맥락으로 추론한 말투
+             */
+            inferred_style?: string | null;
+            /** User Intent */
+            user_intent: string;
+            /** Processing Time Ms */
+            processing_time_ms?: number | null;
         };
         /** ValidationError */
         ValidationError: {
@@ -925,6 +1078,11 @@ export interface components {
             input?: unknown;
             /** Context */
             ctx?: Record<string, never>;
+        };
+        /** VoiceRoomTurnRequest */
+        VoiceRoomTurnRequest: {
+            /** Transcript */
+            transcript: string;
         };
     };
     responses: never;
@@ -1440,6 +1598,106 @@ export interface operations {
             };
         };
     };
+    process_text_turn_rooms__room_id__turns_text_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                room_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TextRoomTurnRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoomTurnResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    process_voice_turn_rooms__room_id__turns_voice_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                room_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VoiceRoomTurnRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoomTurnResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_generated_audio_rooms__room_id__audio__filename__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                room_id: string;
+                filename: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_messages_rooms__room_id__messages_get: {
         parameters: {
             query?: never;
@@ -1506,6 +1764,38 @@ export interface operations {
             };
         };
     };
+    get_message_audio_rooms__room_id__messages__message_id__audio_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                room_id: string;
+                message_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     request_feedback_rooms__room_id__feedback_post: {
         parameters: {
             query?: never;
@@ -1524,39 +1814,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FeedbackResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    text_to_speech_tts_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["TtsRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TtsResponse"];
                 };
             };
             /** @description Validation Error */
